@@ -56,7 +56,7 @@ are still pointer text, stale worktree registrations, per-worktree seeding, and 
 symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
 inside it.
 
-### `ws feature <name> ["<prompt>"] [--preset <p>]`
+### `ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>]`
 
 Starts (or resumes) a feature:
 
@@ -66,9 +66,12 @@ Starts (or resumes) a feature:
 2. Seeds the worktree: copies the machine `scripts/config.json` in, sets the worktree-scoped
    `bernini.feature` git config, and moves in any tracker parked at
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
-3. Opens a tmux window running `claude "bcp-feature <name> <prompt>"` in the worktree. If no tmux
-   server is running, starts a detached session named `ws` instead — attach with
-   `tmux attach -t ws`.
+3. Opens a tmux window (always in the `ws` session, one window per feature) running
+   `claude --permission-mode <m> "bcp-feature <name> <prompt>"` in the worktree. The mode defaults
+   to `acceptEdits` — file edits flow, but Bash/gh stop at a permission prompt until someone
+   attaches — and is never inherited from your user config, so a `bypassPermissions` default on
+   your machine does not leak into unattended agents. Pass `--mode` to override (e.g.
+   `--mode bypassPermissions` for a feature you deliberately want fully autonomous).
 
 The seeded `config.json` is a copy of the main clone's — the machine default. The build preset in
 it is a *choice*, not a machine fact (on Windows, one feature may build dx12 while another builds
@@ -77,6 +80,13 @@ the preset-dependent fields and carries the stored LFS credential across, and no
 touched. The same works by hand at any time: `just init --preset <p> --force` inside the worktree.
 
 Set `WS_NO_AGENT=1` to stop after step 2 and get a prepared worktree with no agent.
+
+### `ws attach [<name>]`
+
+Watch the agents: attaches to the `ws` tmux session, optionally jumping straight to one feature's
+window. Detach with `Ctrl-b d` (the agents keep running); `Ctrl-b n`/`Ctrl-b p` cycle between
+feature windows and `Ctrl-b w` lists them. For a non-interactive peek at what an agent is doing,
+`tmux capture-pane -p -t ws:<name>` prints its screen.
 
 ### `ws done <name>`
 

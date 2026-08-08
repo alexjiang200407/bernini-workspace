@@ -11,5 +11,5 @@ BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"
 
 git -C "$ROOT/bernini" worktree remove "$WT"
-tmux kill-window -t "$NAME" 2>/dev/null || true
+tmux kill-window -t "ws:$NAME" 2>/dev/null || true
 git -C "$ROOT/bernini" branch -d "$BRANCH"

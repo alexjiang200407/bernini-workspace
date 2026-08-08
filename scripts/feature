@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ws feature <name> ["<prompt>"] [--preset <p>] — worktree + agent for a feature.
+# ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] — worktree + agent for a feature.
 #
 # Creates bernini.features/<name> on feat/<name> (branched from origin/master,
 # or resumed if the branch already exists), seeds it with the machine
@@ -10,14 +10,18 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-USAGE='usage: ws feature <name> ["<prompt>"] [--preset <p>]'
+USAGE='usage: ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>]'
 NAME="${1:?$USAGE}"
 shift
 PROMPT=""
 PRESET=""
+# The agent's permission mode. Never bypassPermissions by inheritance: edits
+# flow, but Bash and gh still stop at a prompt until someone attaches.
+MODE="acceptEdits"
 while [ $# -gt 0 ]; do
     case "$1" in
         --preset) PRESET="${2:?--preset needs a value}"; shift 2 ;;
+        --mode) MODE="${2:?--mode needs a value}"; shift 2 ;;
         *) PROMPT="$1"; shift ;;
     esac
 done
@@ -67,11 +71,12 @@ if [ "${WS_NO_AGENT-}" = "1" ]; then
 fi
 
 # Interactive tmux, not `claude -p`: bcp-feature's backgrounded watch-pr needs a
-# live session to wake.
-CMD="claude $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
-if tmux has-session 2>/dev/null; then
-    tmux new-window -c "$WT" -n "$NAME" "$CMD"
+# live session to wake. Every agent window lives in the `ws` session, so
+# ws attach always finds them.
+CMD="claude --permission-mode $(printf '%q' "$MODE") $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
+if tmux has-session -t ws 2>/dev/null; then
+    tmux new-window -t ws: -c "$WT" -n "$NAME" "$CMD"
 else
     tmux new-session -d -s ws -c "$WT" -n "$NAME" "$CMD"
-    echo "started detached tmux session 'ws' — attach with: tmux attach -t ws"
 fi
+echo "agent running in tmux window ws:$NAME — view it with: ws attach $NAME"

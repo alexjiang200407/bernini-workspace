@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# ws attach [<name>] — watch the agents: attach to the tmux session (or one feature's window).
+#
+# Detach again with Ctrl-b d. Inside tmux: Ctrl-b n/p cycles windows (one per
+# feature), Ctrl-b w lists them.
+set -euo pipefail
+
+NAME="${1-}"
+
+if ! tmux has-session -t ws 2>/dev/null; then
+    echo "no agent session running (ws feature <name> starts one)" >&2
+    exit 1
+fi
+
+if [ -n "${TMUX-}" ]; then
+    [ -n "$NAME" ] && tmux select-window -t "ws:$NAME"
+    tmux switch-client -t ws
+else
+    tmux attach -t "ws${NAME:+:$NAME}"
+fi
