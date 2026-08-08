@@ -189,6 +189,8 @@ case "${WORDS[1]-}" in
             features
             resumable
         else
+            emit --cycle "bcp-feature: plan PR, then one task PR at a time (default)"
+            emit --one-shot "bcp-implement: the whole change as one PR to master"
             emit --branch "borrow an existing branch instead of feat/<name>"
             emit --preset "re-init this worktree's config.json with another build preset"
             emit --mode "the agent's permission mode"
