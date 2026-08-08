@@ -6,6 +6,14 @@ development: one main clone, one git worktree per feature, one Claude session pe
 checkout. The clones themselves are git-ignored — this repo tracks only the plan, the map, and the
 scripts.
 
+## Platform support
+
+macOS and Linux. On Windows the workspace only works inside
+[WSL](https://learn.microsoft.com/windows/wsl/) — Git Bash is **not** supported: it has no tmux
+(which `ws feature` needs for the agent sessions), and its `ln -s` silently copies instead of
+linking, which breaks the `ws` dispatcher. Note this applies to the *workspace tooling* only —
+bernini itself still builds natively on Windows from a plain clone.
+
 ## Setup
 
 ```sh
