@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent] — worktree + agent for a feature.
+# ws feature <name> ["<prompt>"] [--cycle|--one-shot] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent] — worktree + agent for a feature.
 #
 # Creates bernini.features/<name> on feat/<name> (branched from origin/master,
 # or resumed if the branch already exists), seeds it with the machine
 # config.json and the worktree-scoped bernini.feature config, then opens a tmux
 # window running a claude session on the feature. --preset gives the worktree
 # its own build preset (e.g. a vulkan preset while the main clone builds dx12).
+#
+# Two workflows, because not every feature wants the same ceremony:
+#   --cycle     bcp-feature — the plan lands as its own PR, then one task PR at
+#               a time into feat/<name>, and only the finished feature is
+#               proposed to master. The default, and what a big change wants.
+#   --one-shot  bcp-implement — research, implement, test, docs, one PR to
+#               master. For a change that is a single reviewable PR.
+# The difference reaches into the checkout: bcp-implement hands over to
+# bcp-feature when bernini.feature is set, so a one-shot leaves that config
+# empty and the precheck measures against origin/master (see the seeding block).
+# A fresh session at a terminal is asked which one; the choice is recorded in
+# the worktree, so resuming it later does not ask again.
 #
 # --branch <b> borrows an existing branch instead: bernini is multi-platform, so
 # a fix written on Windows often has to be built and debugged on the mac. A
@@ -16,12 +28,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-USAGE='usage: ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]'
+USAGE='usage: ws feature <name> ["<prompt>"] [--cycle|--one-shot] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]'
 NAME="${1:?$USAGE}"
 shift
 PROMPT=""
 PRESET=""
 CONTINUE=""
+# cycle (bcp-feature) or one-shot (bcp-implement); `none` is a session with no
+# workflow at all, which is what a borrowed checkout gets. Empty means nobody
+# has said yet — resolved below from the worktree's record, then by asking.
+WORKFLOW=""
 # An existing branch to borrow. Empty means ws's own feat/<name>.
 BRANCH_OPT=""
 NO_AGENT="${WS_NO_AGENT-}"
@@ -35,6 +51,8 @@ MODE="bypassPermissions"
 while [ $# -gt 0 ]; do
     case "$1" in
         --branch | -b) BRANCH_OPT="${2:?--branch needs a value}"; shift 2 ;;
+        --cycle) WORKFLOW=cycle; shift ;;
+        --one-shot | --oneshot) WORKFLOW=one-shot; shift ;;
         --no-agent) NO_AGENT=1; shift ;;
         --preset) PRESET="${2:?--preset needs a value}"; shift 2 ;;
         --mode) MODE="${2:?--mode needs a value}"; shift 2 ;;
@@ -65,11 +83,20 @@ have_branch() {
         git -C "$ROOT/bernini" show-ref --verify --quiet "refs/remotes/origin/$1"
 }
 
+# Resolve first, create afterwards: the questions and the refusals below all
+# depend on what this feature already is, and a run that stops on one of them
+# should not leave a worktree behind.
 EXISTED=""
 BORROWED=""
+NEW_BRANCH=""
+# Whether there is a feature here already — a worktree, or a branch waiting for
+# one. bcp-feature can be pointed at one of these with no prompt at all: it
+# resumes it and reports where it stands.
+EXISTING_FEATURE=""
 if [ -d "$WT" ]; then
     echo "worktree $WT already exists — resuming"
     EXISTED=1
+    EXISTING_FEATURE=1
     # The worktree's branch wins over the default: resuming a borrowed checkout
     # must not be read as a request to move it onto feat/<name>.
     BRANCH="$(git -C "$WT" rev-parse --abbrev-ref HEAD)"
@@ -88,15 +115,67 @@ elif [ -n "$BRANCH_OPT" ]; then
         echo "no branch $BRANCH locally or on origin — push it from the other machine first, or drop --branch to start feat/$NAME" >&2
         exit 1
     fi
-    git -C "$ROOT/bernini" worktree add "$WT" "$BRANCH"
 elif have_branch "feat/$NAME"; then
     # Resume: the branch exists (locally, or on origin — worktree add DWIMs a
     # tracking branch from origin/<branch> when only the remote has it).
     BRANCH="feat/$NAME"
-    git -C "$ROOT/bernini" worktree add "$WT" "$BRANCH"
+    EXISTING_FEATURE=1
 else
     BRANCH="feat/$NAME"
-    git -C "$ROOT/bernini" worktree add "$WT" -b "$BRANCH" origin/master
+    NEW_BRANCH=1
+fi
+
+# The workflow: what the caller said, else what this worktree was made with,
+# else asked for. A worktree from before ws recorded it ran the only workflow
+# there was, and a borrowed checkout runs none — it is someone else's branch
+# mid-flight, so the session opens on the prompt alone and the person debugging
+# says what they want.
+if [ -z "$WORKFLOW" ] && [ -n "$EXISTED" ]; then
+    WORKFLOW="$(git -C "$WT" config --worktree --get bernini.wsWorkflow 2>/dev/null || true)"
+fi
+if [ -z "$WORKFLOW" ]; then
+    if [ -n "$BORROWED" ]; then
+        WORKFLOW=none
+    elif [ -n "$EXISTED" ]; then
+        WORKFLOW=cycle
+    elif [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ -t 0 ]; then
+        printf 'workflow?\n'
+        printf '  [1] cycle    — plan PR, then one task PR at a time into feat/%s (bcp-feature)\n' "$NAME"
+        printf '  [2] one-shot — the whole change as a single PR to master (bcp-implement)\n'
+        printf 'choice [1]: '
+        read -r ans
+        case "$ans" in
+            2 | one-shot | oneshot) WORKFLOW=one-shot ;;
+            *) WORKFLOW=cycle ;;
+        esac
+    else
+        WORKFLOW=cycle
+    fi
+fi
+
+# A fresh session with no prompt is an agent with nothing to do — the empty
+# `bcp-feature <name>` that started this. Resuming is the exception (the
+# conversation carries the intent), and so is pointing cycle at a feature that
+# already exists: bcp-feature picks it up and reports where it stands.
+if [ -z "$PROMPT" ] && [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ "$WORKFLOW" != none ] &&
+    ! { [ "$WORKFLOW" = cycle ] && [ -n "$EXISTING_FEATURE" ]; }; then
+    if [ -t 0 ]; then
+        printf 'prompt — what should the agent do? '
+        read -r PROMPT
+    fi
+    if [ -z "$PROMPT" ]; then
+        echo "ws feature $NAME: a new $WORKFLOW feature needs a prompt — there is nothing for the agent to do without one" >&2
+        echo "  ws feature $NAME \"<what to build>\"" >&2
+        exit 1
+    fi
+fi
+
+if [ -z "$EXISTED" ]; then
+    if [ -n "$NEW_BRANCH" ]; then
+        git -C "$ROOT/bernini" worktree add "$WT" -b "$BRANCH" origin/master
+    else
+        git -C "$ROOT/bernini" worktree add "$WT" "$BRANCH"
+    fi
 fi
 
 # A branch shared with another machine goes stale locally without looking it:
@@ -133,11 +212,19 @@ git -C "$WT" config extensions.worktreeConfig true
 # ws made it. ws done deletes only what ws created.
 git -C "$WT" config --worktree bernini.wsBranch "$BRANCH"
 git -C "$WT" config --worktree bernini.wsBorrowed "$([ -n "$BORROWED" ] && echo true || echo false)"
-if [ -n "$BORROWED" ]; then
+# The workflow is the worktree's, not the invocation's: a later `ws feature
+# <name>` picks it up from here instead of asking again, and the seeding just
+# below has to agree with it every time.
+git -C "$WT" config --worktree bernini.wsWorkflow "$WORKFLOW"
+if [ -n "$BORROWED" ] || [ "$WORKFLOW" = one-shot ]; then
     # bernini.feature is the precheck's diff base (origin/$FEATURE), not a label.
     # A borrowed branch is the thing under the microscope, not the base it is
     # measured against — set it here and a precheck diffs the branch against
     # itself and reports a clean slice. Empty, the base is origin/master.
+    #
+    # A one-shot lands on master as one PR, so origin/master is exactly the base
+    # it wants — and bcp-implement reads a set bernini.feature as "this is a
+    # feature branch after all" and hands over to bcp-feature.
     #
     # Empty rather than unset, because unset only clears this worktree's copy:
     # a stray bernini.feature in the shared .git/config would show through, and
@@ -208,20 +295,23 @@ if [ -n "$COMPACT" ]; then
     CMD="$CMD --continue '/compact'"
 elif [ -n "$CONTINUE" ]; then
     CMD="$CMD --continue${PROMPT:+ $(printf '%q' "$PROMPT")}"
-elif [ -n "$BORROWED" ]; then
-    # A borrowed branch is someone else's feature, mid-flight. bcp-feature would
-    # open a feature workflow on top of it; the session gets the prompt as given
-    # (or nothing) and whoever is debugging says what they want.
-    CMD="$CMD${PROMPT:+ $(printf '%q' "$PROMPT")}"
-else
+elif [ "$WORKFLOW" = one-shot ]; then
+    CMD="$CMD $(printf '%q' "bcp-implement $PROMPT")"
+elif [ "$WORKFLOW" = cycle ]; then
     CMD="$CMD $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
+else
+    # No workflow — a borrowed branch is someone else's feature, mid-flight, and
+    # bcp-feature would open a feature workflow on top of it. The session gets
+    # the prompt as given (or nothing) and whoever is debugging says what they
+    # want.
+    CMD="$CMD${PROMPT:+ $(printf '%q' "$PROMPT")}"
 fi
 if tmux has-session -t ws 2>/dev/null; then
     tmux new-window -t ws: -c "$WT" -n "$NAME" "$CMD"
 else
     tmux new-session -d -s ws -c "$WT" -n "$NAME" "$CMD"
 fi
-echo "agent running in tmux window ws:$NAME — view it with: ws attach $NAME"
+echo "agent running in tmux window ws:$NAME ($WORKFLOW) — view it with: ws attach $NAME"
 
 # At a terminal, drop straight into the agent's window (Ctrl-b d detaches).
 if [ -t 0 ] && [ -t 1 ]; then

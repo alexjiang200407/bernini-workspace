@@ -35,9 +35,17 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   candidates, and it derives them from `scripts/`, the worktrees and git — so a new command or flag
   completes without a completion file being touched. Scripts named `_*` are plumbing: routable,
   hidden from usage.
-- `ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
+- `ws feature <name> ["<prompt>"] [--cycle|--one-shot] [--branch <b>] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
   `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
-  `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.
+  `bernini.feature` config, then a tmux window running the agent on one of two workflows:
+  `--cycle` (default) runs `bcp-feature <name> <prompt>` — plan PR, then one task PR at a time into
+  `feat/<name>`; `--one-shot` runs `bcp-implement <prompt>` — the whole change as a single PR to
+  master, which also means `bernini.feature` is left empty (bcp-implement hands over to bcp-feature
+  when it is set, and origin/master is the base a one-shot wants). A fresh session at a terminal is
+  asked which; the answer is recorded as `bernini.wsWorkflow` so resuming neither asks again nor
+  re-seeds the wrong base. A new feature must come with a prompt — a terminal run asks for one, a
+  non-interactive run refuses before creating anything; `--continue`, a borrowed checkout, and
+  `--cycle` on an existing feature are the exceptions.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
   is per-checkout; the preset in it is a choice, not machine state). A fresh session at a
   terminal is asked which model to run on (`--model <m>` answers it up front; non-interactive

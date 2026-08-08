@@ -95,7 +95,7 @@ shells cannot drift apart, and a new script in `scripts/` completes the moment i
 no list of commands or flags to keep in sync. Scripts named `_*` are plumbing: routable
 (`ws __complete`), hidden from `ws` usage.
 
-### `ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]`
+### `ws feature <name> ["<prompt>"] [--cycle|--one-shot] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]`
 
 Starts (or resumes) a feature:
 
@@ -106,7 +106,7 @@ Starts (or resumes) a feature:
    `bernini.feature` git config, and moves in any tracker parked at
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
 3. Opens a tmux window (always in the `ws` session, one window per feature) running
-   `claude --permission-mode <m> "bcp-feature <name> <prompt>"` in the worktree. The mode defaults
+   `claude --permission-mode <m> "<workflow> <prompt>"` in the worktree. The mode defaults
    to `bypassPermissions` — feature agents run unattended, so nothing stops at a prompt; bernini's
    own guard hooks (`gh pr` blocking, PR-watch) still apply. Pass `--mode` to gate a specific
    feature instead (e.g. `--mode acceptEdits` lets edits flow but stops Bash at a permission
@@ -119,6 +119,29 @@ Starts (or resumes) a feature:
    non-interactive runs just print the window name and return. If the feature's agent is already
    running, `ws feature <name>` simply attaches to it — one agent per feature, and the command is
    idempotent: it converges on "worktree exists, agent running, you're looking at it".
+
+**The workflow: `--cycle` or `--one-shot`.** Not every change wants the same ceremony, so the agent
+is started on one of two skills:
+
+| | runs | the work lands as | `bernini.feature` |
+|---|---|---|---|
+| `--cycle` (default) | `bcp-feature <name> <prompt>` | the plan as its own PR, then one task PR at a time into `feat/<name>`; only the finished feature is proposed to master | `feat/<name>` |
+| `--one-shot` | `bcp-implement <prompt>` | research → implement → test → docs → **one** PR to master | empty |
+
+That last column is not bookkeeping. `bernini.feature` is the precheck's diff base, and
+`bcp-implement` reads it being set as "this is a feature branch after all" and hands over to
+`bcp-feature` — so a one-shot leaves it empty, exactly as a borrowed branch does, and its diff is
+measured against `origin/master`. A fresh session at a terminal is asked which workflow to run;
+`--cycle`/`--one-shot` answers up front, and non-interactive runs default to `cycle`. The answer is
+recorded in the worktree (`bernini.wsWorkflow`), so resuming the feature later neither asks again
+nor re-seeds the wrong base.
+
+**A new feature needs a prompt.** There is nothing for an agent to do without one — `bcp-feature`
+would open a feature named `<name>` with no idea what it is for. So a fresh session is asked for a
+prompt if it was not given one, and a non-interactive run refuses outright, *before* creating the
+worktree, rather than leaving one behind. Two exceptions, both of which carry the intent already:
+`--continue` (the conversation has it) and pointing `--cycle` at a feature that already exists —
+`bcp-feature` picks that up and reports where it stands.
 
 The seeded `config.json` is a copy of the main clone's — the machine default. The build preset in
 it is a *choice*, not a machine fact (on Windows, one feature may build dx12 while another builds
