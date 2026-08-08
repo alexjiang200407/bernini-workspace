@@ -26,10 +26,12 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
 
 - `ws init` — once per machine: clone `bernini` and `bernini-test-project`, then run `just init` in
   `bernini/` (machine `config.json`, git hooks, LFS transfer agent — see `bernini/docs/lfs.md`).
-- `ws feature <name> ["<prompt>"]` — worktree at `bernini.features/<name>` on `feat/<name>`
-  (resumes if the branch exists), seeded with `config.json` and worktree-scoped `bernini.feature`
-  config, then a tmux window running `claude "bcp-feature <name> <prompt>"`. Set `WS_NO_AGENT=1`
-  to create the worktree without launching the agent.
+- `ws feature <name> ["<prompt>"] [--preset <p>]` — worktree at `bernini.features/<name>` on
+  `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
+  `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.
+  `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
+  is per-checkout; the preset in it is a choice, not machine state). Set `WS_NO_AGENT=1` to create
+  the worktree without launching the agent.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete `feat/<name>`. Refuses a
   dirty worktree or an unmerged branch rather than forcing.
 - `ws list` — worktrees alongside open PRs: every live feature, its checkout, its PR state.

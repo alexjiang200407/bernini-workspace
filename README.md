@@ -43,7 +43,7 @@ workspace root (skipping any that already exist), then runs `just init` in `bern
 generates the machine `config.json`, installs the git hooks, and configures the LFS transfer agent
 (see `bernini/docs/lfs.md`).
 
-### `ws feature <name> ["<prompt>"]`
+### `ws feature <name> ["<prompt>"] [--preset <p>]`
 
 Starts (or resumes) a feature:
 
@@ -56,6 +56,12 @@ Starts (or resumes) a feature:
 3. Opens a tmux window running `claude "bcp-feature <name> <prompt>"` in the worktree. If no tmux
    server is running, starts a detached session named `ws` instead — attach with
    `tmux attach -t ws`.
+
+The seeded `config.json` is a copy of the main clone's — the machine default. The build preset in
+it is a *choice*, not a machine fact (on Windows, one feature may build dx12 while another builds
+vulkan), so `--preset <p>` re-inits the worktree's own copy with that preset: `init.py` re-derives
+the preset-dependent fields and carries the stored LFS credential across, and no other checkout is
+touched. The same works by hand at any time: `just init --preset <p> --force` inside the worktree.
 
 Set `WS_NO_AGENT=1` to stop after step 2 and get a prepared worktree with no agent.
 

@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# ws feature <name> ["<prompt>"] — worktree + agent for a feature.
+# ws feature <name> ["<prompt>"] [--preset <p>] — worktree + agent for a feature.
 #
 # Creates bernini.features/<name> on feat/<name> (branched from origin/master,
 # or resumed if the branch already exists), seeds it with the machine
 # config.json and the worktree-scoped bernini.feature config, then opens a tmux
-# window running a claude session on the feature. WS_NO_AGENT=1 skips the tmux
-# step and only prepares the worktree.
+# window running a claude session on the feature. --preset gives the worktree
+# its own build preset (e.g. a vulkan preset while the main clone builds dx12).
+# WS_NO_AGENT=1 skips the tmux step and only prepares the worktree.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NAME="${1:?usage: ws feature <name> [\"<prompt>\"]}"
-PROMPT="${2-}"
+USAGE='usage: ws feature <name> ["<prompt>"] [--preset <p>]'
+NAME="${1:?$USAGE}"
+shift
+PROMPT=""
+PRESET=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --preset) PRESET="${2:?--preset needs a value}"; shift 2 ;;
+        *) PROMPT="$1"; shift ;;
+    esac
+done
 BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"
 
@@ -43,6 +53,13 @@ if [ -f "$ROOT/bernini/.claude/features/$NAME.md" ] && [ ! -f "$WT/.claude/featu
 fi
 git -C "$WT" config extensions.worktreeConfig true
 git -C "$WT" config --worktree bernini.feature "$BRANCH"
+
+# The seeded config.json carries the machine default preset; a feature that
+# wants a different one re-inits its own copy. init.py re-derives the
+# preset-dependent fields and carries the stored LFS credential across.
+if [ -n "$PRESET" ]; then
+    (cd "$WT" && python3 scripts/init.py --preset "$PRESET" --force --no-bot)
+fi
 
 if [ "${WS_NO_AGENT-}" = "1" ]; then
     echo "WS_NO_AGENT=1 — worktree ready at $WT, no agent launched"
