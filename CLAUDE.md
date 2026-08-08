@@ -52,6 +52,10 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
 - `ws attach [<name>]` — attach to the `ws` tmux session to watch the agents (optionally one
   feature's window); detach with `Ctrl-b d`. Each terminal gets its own view session grouped with
   `ws` (`ws-view-<pid>`), so switching windows in one terminal does not move the others.
+- `ws cmd <name> [--] <command> [args...]` — run a command in a feature's checkout
+  (`ws cmd vat -- just run editor`), or in the main clone with `bernini`. Foreground, in your
+  terminal, exiting with the command's status; the cwd is that checkout, so relative paths resolve
+  there and not where you invoked `ws`. One terminal instead of one per worktree.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete the branch ws created for it
   (a borrowed branch is left alone). Refuses a dirty worktree or an unmerged branch rather than
   forcing.

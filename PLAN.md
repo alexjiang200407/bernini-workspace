@@ -19,6 +19,7 @@ a checkout sits.
 | agent spawning (tmux + `claude` launch) | — | `ws feature` |
 | layout map (`CLAUDE.md`, inherited by nested sessions) | — | ✅ |
 | cross-feature status (worktrees × PR states) | — | `ws list` |
+| running a command in another checkout (build, run the editor) | — | `ws cmd` |
 
 Rejected alternative: baking worktree creation into bcp-feature (the shape PR #303 currently has).
 It couples the repo to a layout choice, and the session that starts a feature begins in one

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# ws cmd <name> [--] <command> [args...] — run a command in a feature's checkout.
+#
+# One terminal for the whole workspace: `ws cmd vat -- just run editor` builds
+# and runs out of bernini.features/vat without cd-ing there and without a second
+# window. <name> is a feature (the same key ws feature and ws done take), or
+# `bernini` for the main clone.
+#
+# The command runs *in* the checkout, in the foreground, and ws exits with its
+# status — so it pipes, redirects and chains like any other command. The cwd is
+# the thing to keep in mind: relative paths are relative to the checkout, not to
+# wherever you invoked ws from. `ws cmd vat -- cat docs/taa.md` reads the
+# worktree's copy of that file, and writes land in the worktree.
+set -euo pipefail
+
+# Resolved before the cd below, because after it "$0" no longer says where the
+# workspace is.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+USAGE='usage: ws cmd <name> [--] <command> [args...]'
+NAME="${1:?$USAGE}"
+shift
+
+case "$NAME" in
+    bernini | master) DIR="$ROOT/bernini" ;;
+    *) DIR="$ROOT/bernini.features/$NAME" ;;
+esac
+if [ ! -d "$DIR" ]; then
+    echo "no checkout '$NAME' at $DIR" >&2
+    echo "features: $(ls "$ROOT/bernini.features" 2>/dev/null | tr '\n' ' ')(and 'bernini' for the main clone)" >&2
+    exit 1
+fi
+
+# `--` is optional: it only matters when the command starts with something ws
+# would otherwise read as its own (ws cmd vat -- --version).
+if [ "${1-}" = "--" ]; then
+    shift
+fi
+if [ $# -eq 0 ]; then
+    echo "$USAGE" >&2
+    echo "a shell in the checkout is a command too: ws cmd $NAME -- \$SHELL" >&2
+    exit 1
+fi
+
+# A checkout inherited from the caller's environment beats the one on the
+# command line: a stray GIT_DIR/GIT_WORK_TREE (a git hook, a tool that exports
+# them) would quietly aim the command's git at the wrong worktree, which is
+# exactly the confusion ws cmd exists to prevent.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+
+# Which checkout the output belongs to, since the point is running several from
+# one terminal. On stderr and only at a terminal, so it stays out of pipes.
+if [ -t 2 ]; then
+    echo "→ ${DIR#"$ROOT/"}: $*" >&2
+fi
+
+cd "$DIR"
+# exec, so signals (Ctrl-C into the editor) and the exit status pass straight
+# through instead of being filtered by a wrapper shell.
+exec "$@"

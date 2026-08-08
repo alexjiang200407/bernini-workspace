@@ -138,6 +138,23 @@ keeps running; reattach any time. Closing your terminal window amounts to the sa
 with `ws feature <name> --continue` — see below). Ending an agent is `ws done`'s job, not the
 keyboard's.
 
+### `ws cmd <name> [--] <command> [args...]`
+
+Run something in a feature's checkout without cd-ing there: `ws cmd vat -- just run editor`. One
+terminal then serves the whole workspace — build in one worktree, run the editor from another,
+`ws cmd bernini -- git log` in the main clone — instead of a window parked in each. `<name>` is a
+feature (the same key `ws feature` and `ws done` take) or `bernini` for the main clone; `--` is
+optional and only matters when the command itself starts with a dash.
+
+The command runs in the foreground with your terminal attached — interactive tools, `Ctrl-C`, and
+the exit status all pass straight through, so it chains and pipes like anything else. **The cwd is
+the checkout**, not wherever you invoked `ws` from: relative paths resolve inside the worktree,
+reads and writes both. If what you actually wanted was a shell there, that is a command too:
+`ws cmd vat -- $SHELL`.
+
+The feature's agent may be working in the same checkout (`ws attach <name>` shows what it is up
+to) — two concurrent builds share one build directory and will trip over each other.
+
 ### `ws done <name>`
 
 Tears the feature down: removes the worktree (the git-ignored tracker and worktree config die with
