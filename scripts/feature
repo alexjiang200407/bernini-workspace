@@ -32,6 +32,15 @@ fi
 if [ -f "$ROOT/bernini/scripts/config.json" ]; then
     cp "$ROOT/bernini/scripts/config.json" "$WT/scripts/config.json"
 fi
+
+# A tracker parked in the main clone (a feature migrating in from another
+# checkout) moves into the worktree: the tracker's home is the checkout the
+# feature session runs in, and it dies with the worktree.
+if [ -f "$ROOT/bernini/.claude/features/$NAME.md" ] && [ ! -f "$WT/.claude/features/$NAME.md" ]; then
+    mkdir -p "$WT/.claude/features"
+    mv "$ROOT/bernini/.claude/features/$NAME.md" "$WT/.claude/features/$NAME.md"
+    echo "moved parked tracker bernini/.claude/features/$NAME.md into the worktree"
+fi
 git -C "$WT" config extensions.worktreeConfig true
 git -C "$WT" config --worktree bernini.feature "$BRANCH"
 

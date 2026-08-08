@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ws <command> [args] — route to the workspace scripts in ws.d/.
+# ws <command> [args] — route to the workspace scripts in scripts/.
 #
 # `./ws feature vat` from the workspace root, or symlink this file onto PATH
 # (`ln -s .../ws ~/bin/ws`) to get the `ws feature vat` spelling from
@@ -7,7 +7,7 @@
 set -euo pipefail
 
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
-DIR="$(cd "$(dirname "$SELF")/ws.d" && pwd)"
+DIR="$(cd "$(dirname "$SELF")/scripts" && pwd)"
 
 usage() {
     echo "usage: ws <command> [args]"

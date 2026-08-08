@@ -11,7 +11,7 @@ the full design; this file is the map every nested session inherits.
   removed only by the `ws` scripts.
 - `bernini-test-project/` — clone of the test project
   (`git@github.com:alexjiang200407/bernini-test-project.git`).
-- `ws` — the dispatcher for the workspace scripts in `ws.d/` (below): `./ws <command> [args]`.
+- `ws` — the dispatcher for the workspace scripts in `scripts/` (below): `./ws <command> [args]`.
   The scripts run at the workspace root; nobody *works* here. Symlink `ws` onto PATH for the
   `ws feature vat` spelling from anywhere.
 
