@@ -29,10 +29,14 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# One agent per feature: a second launch would shadow the window ws done kills.
+# One agent per feature: when it is already running, ws feature just becomes
+# the way to its window (a second launch would shadow the one ws done kills).
 if tmux list-windows -t ws -F '#W' 2>/dev/null | grep -qx "$NAME"; then
-    echo "an agent for $NAME is already running — view it with: ws attach $NAME" >&2
-    exit 1
+    if [ -t 0 ] && [ -t 1 ]; then
+        exec "$ROOT/scripts/attach" "$NAME"
+    fi
+    echo "an agent for $NAME is already running — view it with: ws attach $NAME"
+    exit 0
 fi
 BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"

@@ -73,7 +73,9 @@ Starts (or resumes) a feature:
    feature instead (e.g. `--mode acceptEdits` lets edits flow but stops Bash at a permission
    prompt until someone attaches). When run at a
    terminal, it then attaches you straight to the agent's window — `Ctrl-b d` to step back out;
-   non-interactive runs just print the window name and return.
+   non-interactive runs just print the window name and return. If the feature's agent is already
+   running, `ws feature <name>` simply attaches to it — one agent per feature, and the command is
+   idempotent: it converges on "worktree exists, agent running, you're looking at it".
 
 The seeded `config.json` is a copy of the main clone's — the machine default. The build preset in
 it is a *choice*, not a machine fact (on Windows, one feature may build dx12 while another builds

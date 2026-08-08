@@ -39,8 +39,8 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   exited or the machine rebooted; on an existing worktree without `--continue`, a terminal run
   asks whether to resume (and whether to compact first), while non-interactive runs start
   fresh. A terminal run auto-attaches to the new agent's window (`Ctrl-b d` to step out);
-  non-interactive runs return immediately. Refuses to start a second agent for a feature that has one
-  running. Set `WS_NO_AGENT=1` to create the worktree without launching the agent.
+  non-interactive runs return immediately. If the feature's agent is already running, a terminal
+  run attaches to it instead of starting a second one. Set `WS_NO_AGENT=1` to create the worktree without launching the agent.
 - `ws attach [<name>]` — attach to the `ws` tmux session to watch the agents (optionally one
   feature's window); detach with `Ctrl-b d`.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete `feat/<name>`. Refuses a
