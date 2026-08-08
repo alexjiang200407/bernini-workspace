@@ -24,7 +24,9 @@ else
 fi
 
 cd "$ROOT/bernini"
-if command -v just >/dev/null 2>&1; then
+if [ -f scripts/config.json ]; then
+    echo "bernini already initialized (scripts/config.json exists) — skipping just init"
+elif command -v just >/dev/null 2>&1; then
     just init
 else
     python3 scripts/init.py

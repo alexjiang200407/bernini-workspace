@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# ws doctor — check the workspace and its checkouts for problems.
+#
+# ok/warn/FAIL per check; exits non-zero when anything FAILs. warns are things
+# the workspace survives; FAILs break ws feature or the builds inside it.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FAILS=0
+WARNS=0
+ok()   { printf 'ok    %s\n' "$1"; }
+warn() { printf 'warn  %s\n' "$1"; WARNS=$((WARNS + 1)); }
+fail() { printf 'FAIL  %s\n' "$1"; FAILS=$((FAILS + 1)); }
+
+# Platform: the workspace tooling needs a real unix (see README).
+case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*) fail "Git Bash/Cygwin is unsupported — run the workspace from WSL" ;;
+    *) ok "platform: $(uname -s)" ;;
+esac
+
+# Tools ws feature depends on outright...
+for t in git python3 tmux claude; do
+    if command -v "$t" >/dev/null 2>&1; then
+        ok "$t on PATH"
+    else
+        fail "$t not on PATH"
+    fi
+done
+# ...and ones with a fallback or a degraded mode.
+command -v just >/dev/null 2>&1 || warn "just not on PATH (scripts fall back to python3 scripts/<x>.py)"
+command -v gh >/dev/null 2>&1 || warn "gh not on PATH (ws list shows no PRs)"
+command -v git-lfs >/dev/null 2>&1 || fail "git-lfs not on PATH — assets check out as pointer text"
+
+# The clones ws init creates.
+if [ -d "$ROOT/bernini/.git" ]; then
+    ok "bernini/ cloned"
+else
+    fail "bernini/ missing — run ws init"
+fi
+[ -d "$ROOT/bernini-test-project/.git" ] || warn "bernini-test-project/ missing — run ws init"
+
+if [ -d "$ROOT/bernini/.git" ]; then
+    # just init has been run (config.json is the machine config it writes).
+    if [ -f "$ROOT/bernini/scripts/config.json" ]; then
+        ok "bernini initialized (scripts/config.json exists)"
+    else
+        fail "bernini/scripts/config.json missing — run ws init (worktrees seed from it)"
+    fi
+
+    # The main clone stays on master (PLAN.md); a parked branch blocks nothing
+    # today but means quick fixes and landing happen in the wrong place.
+    branch="$(git -C "$ROOT/bernini" branch --show-current)"
+    if [ "$branch" = master ]; then
+        ok "bernini/ on master"
+    else
+        warn "bernini/ parked on '$branch' — the main clone should stay on master"
+    fi
+
+    # LFS smudge: a tracked asset whose working copy is still pointer text
+    # means the filters are not configured on this machine.
+    asset="$(git -C "$ROOT/bernini" lfs ls-files -n 2>/dev/null | head -1)"
+    if [ -n "$asset" ] && [ -f "$ROOT/bernini/$asset" ]; then
+        if head -c 12 "$ROOT/bernini/$asset" | grep -q '^version http'; then
+            fail "LFS assets are pointer text (e.g. $asset) — run ws init, then git -C bernini lfs pull"
+        else
+            ok "LFS assets smudged"
+        fi
+    fi
+
+    # Worktree health: stale registrations, and the per-worktree seeding.
+    if git -C "$ROOT/bernini" worktree list --porcelain | grep -q '^prunable'; then
+        warn "stale worktree registrations — run: git -C bernini worktree prune"
+    fi
+    for wt in "$ROOT"/bernini.features/*/; do
+        [ -d "$wt" ] || continue
+        name="$(basename "$wt")"
+        [ -f "$wt/scripts/config.json" ] || warn "worktree $name has no scripts/config.json (re-run ws feature $name)"
+        if ! git -C "$wt" config --worktree bernini.feature >/dev/null 2>&1; then
+            warn "worktree $name has no bernini.feature config (re-run ws feature $name)"
+        fi
+    done
+fi
+
+# The bare `ws` spelling.
+target="$(command -v ws 2>/dev/null || true)"
+if [ -z "$target" ]; then
+    warn "ws not on PATH — run ws init, or symlink $ROOT/ws into a PATH directory"
+elif [ "$(readlink -f "$target" 2>/dev/null || echo "$target")" != "$ROOT/ws" ]; then
+    warn "ws on PATH resolves to $target, not this workspace"
+else
+    ok "ws on PATH -> this workspace"
+fi
+
+echo
+if [ "$FAILS" -gt 0 ]; then
+    echo "$FAILS problem(s), $WARNS warning(s)"
+    exit 1
+fi
+echo "healthy — $WARNS warning(s)"

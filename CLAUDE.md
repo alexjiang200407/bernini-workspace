@@ -26,6 +26,9 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
 
 - `ws init` — once per machine: clone `bernini` and `bernini-test-project`, then run `just init` in
   `bernini/` (machine `config.json`, git hooks, LFS transfer agent — see `bernini/docs/lfs.md`).
+  Idempotent: existing clones and an existing `config.json` are skipped.
+- `ws doctor` — health check: platform, tools, clones, init state, LFS smudge, worktree seeding.
+  Exits non-zero on FAILs.
 - `ws feature <name> ["<prompt>"] [--preset <p>]` — worktree at `bernini.features/<name>` on
   `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
   `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.

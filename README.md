@@ -43,6 +43,18 @@ workspace root (skipping any that already exist), then runs `just init` in `bern
 generates the machine `config.json`, installs the git hooks, and configures the LFS transfer agent
 (see `bernini/docs/lfs.md`).
 
+Re-running `ws init` is safe: clones that exist are skipped, and `just init` is skipped once
+`bernini/scripts/config.json` exists.
+
+### `ws doctor`
+
+Checks the workspace for problems and exits non-zero on any `FAIL`: platform (Git Bash is
+rejected), required tools (`git`, `python3`, `tmux`, `claude`, `git-lfs`), the clones, whether
+`just init` has been run, whether `bernini/` is parked off master, whether LFS assets smudged or
+are still pointer text, stale worktree registrations, per-worktree seeding, and the `ws` PATH
+symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
+inside it.
+
 ### `ws feature <name> ["<prompt>"] [--preset <p>]`
 
 Starts (or resumes) a feature:
