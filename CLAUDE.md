@@ -29,11 +29,13 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   Idempotent: existing clones and an existing `config.json` are skipped.
 - `ws doctor` — health check: platform, tools, clones, init state, LFS smudge, worktree seeding.
   Exits non-zero on FAILs.
-- `ws feature <name> ["<prompt>"] [--preset <p>]` — worktree at `bernini.features/<name>` on
+- `ws feature <name> ["<prompt>"] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
   `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
   `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
-  is per-checkout; the preset in it is a choice, not machine state). `--mode` sets the agent's
+  is per-checkout; the preset in it is a choice, not machine state). A fresh session at a
+  terminal is asked which model to run on (`--model <m>` answers it up front; non-interactive
+  runs take claude's configured default; resumed conversations keep their model). `--mode` sets the agent's
   permission mode (default `bypassPermissions` — agents run unattended; set, not inherited). `--continue` resumes the worktree's
   previous claude conversation instead of starting fresh — the recovery path after an agent
   exited or the machine rebooted; on an existing worktree without `--continue`, a terminal run

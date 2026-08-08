@@ -56,7 +56,7 @@ are still pointer text, stale worktree registrations, per-worktree seeding, and 
 symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
 inside it.
 
-### `ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--continue]`
+### `ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--model <m>] [--continue]`
 
 Starts (or resumes) a feature:
 
@@ -71,7 +71,11 @@ Starts (or resumes) a feature:
    to `bypassPermissions` — feature agents run unattended, so nothing stops at a prompt; bernini's
    own guard hooks (`gh pr` blocking, PR-watch) still apply. Pass `--mode` to gate a specific
    feature instead (e.g. `--mode acceptEdits` lets edits flow but stops Bash at a permission
-   prompt until someone attaches). When run at a
+   prompt until someone attaches). A *fresh* session at a terminal is asked which model to run
+   on first — `opus`, `sonnet`, `haiku`, any other name typed through to `claude --model`, or
+   Enter for the configured default; `--model <m>` answers it up front, and non-interactive runs
+   take the default silently. A resumed conversation keeps the model it was started on, so the
+   question is skipped for `--continue`. When run at a
    terminal, it then attaches you straight to the agent's window — `Ctrl-b d` to step back out;
    non-interactive runs just print the window name and return. If the feature's agent is already
    running, `ws feature <name>` simply attaches to it — one agent per feature, and the command is
