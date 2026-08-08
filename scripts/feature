@@ -122,3 +122,8 @@ else
     tmux new-session -d -s ws -c "$WT" -n "$NAME" "$CMD"
 fi
 echo "agent running in tmux window ws:$NAME — view it with: ws attach $NAME"
+
+# At a terminal, drop straight into the agent's window (Ctrl-b d detaches).
+if [ -t 0 ] && [ -t 1 ]; then
+    exec "$ROOT/scripts/attach" "$NAME"
+fi

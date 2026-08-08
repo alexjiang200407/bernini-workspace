@@ -71,7 +71,9 @@ Starts (or resumes) a feature:
    to `acceptEdits` — file edits flow, but Bash/gh stop at a permission prompt until someone
    attaches — and is never inherited from your user config, so a `bypassPermissions` default on
    your machine does not leak into unattended agents. Pass `--mode` to override (e.g.
-   `--mode bypassPermissions` for a feature you deliberately want fully autonomous).
+   `--mode bypassPermissions` for a feature you deliberately want fully autonomous). When run at a
+   terminal, it then attaches you straight to the agent's window — `Ctrl-b d` to step back out;
+   non-interactive runs just print the window name and return.
 
 The seeded `config.json` is a copy of the main clone's — the machine default. The build preset in
 it is a *choice*, not a machine fact (on Windows, one feature may build dx12 while another builds
