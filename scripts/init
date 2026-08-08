@@ -36,8 +36,12 @@ if ! command -v tmux >/dev/null 2>&1; then
                 echo "warning: tmux missing and no Homebrew found — install tmux by hand" >&2
             fi ;;
         Linux)
+            # apt first as the native choice; Homebrew also runs on Linux, so
+            # a machine that has it can install without sudo.
             if command -v apt-get >/dev/null 2>&1; then
                 sudo apt-get install -y tmux
+            elif command -v brew >/dev/null 2>&1; then
+                brew install tmux
             else
                 echo "warning: tmux missing — install it with your package manager" >&2
             fi ;;
