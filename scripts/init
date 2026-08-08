@@ -23,6 +23,27 @@ else
     git clone "$TEST_PROJECT_URL" "$ROOT/bernini-test-project"
 fi
 
+# tmux hosts the feature agent sessions (ws feature). Install it the way
+# bernini's init.py treats its tools: obtainable without a decision, so obtain
+# it — through the platform package manager. python3 is assumed on PATH, same
+# as in bernini.
+if ! command -v tmux >/dev/null 2>&1; then
+    case "$(uname -s)" in
+        Darwin)
+            if command -v brew >/dev/null 2>&1; then
+                brew install tmux
+            else
+                echo "warning: tmux missing and no Homebrew found — install tmux by hand" >&2
+            fi ;;
+        Linux)
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get install -y tmux
+            else
+                echo "warning: tmux missing — install it with your package manager" >&2
+            fi ;;
+    esac
+fi
+
 cd "$ROOT/bernini"
 if [ -f scripts/config.json ]; then
     echo "bernini already initialized (scripts/config.json exists) — skipping just init"

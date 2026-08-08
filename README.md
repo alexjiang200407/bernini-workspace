@@ -39,9 +39,10 @@ ln -s "$PWD/ws" ~/.local/bin/ws
 
 Once per machine. Clones `bernini` and
 [`bernini-test-project`](https://github.com/alexjiang200407/bernini-test-project) into the
-workspace root (skipping any that already exist), then runs `just init` in `bernini/` — which
+workspace root (skipping any that already exist), installs tmux if missing (Homebrew on macOS,
+apt on Linux — tmux hosts the feature agent sessions), then runs `just init` in `bernini/` — which
 generates the machine `config.json`, installs the git hooks, and configures the LFS transfer agent
-(see `bernini/docs/lfs.md`).
+(see `bernini/docs/lfs.md`). Like bernini's own scripts, `python3` is assumed to be on PATH.
 
 Re-running `ws init` is safe: clones that exist are skipped, and `just init` is skipped once
 `bernini/scripts/config.json` exists.
