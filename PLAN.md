@@ -89,8 +89,9 @@ checkout, its open PRs.
 - [x] W2 workspace root becomes a repo: `git init`, this file, `CLAUDE.md`, `.gitignore`.
       Gate: a session opened in `bernini/` sees the root `CLAUDE.md` in its context.
       Remote: `git@github.com:alexjiang200407/bernini-workspace.git`.
-- [ ] W3 `bernini/` finished initializing: on master, `just init`, LFS agent configured.
-      Gate: `just build` and an LFS smudge succeed there.
+- [x] W3 `bernini/` finished initializing: on master, `just init`, LFS agent configured.
+      Gate: `just build` and an LFS smudge succeed there. (Built 2026-08-08, `macos-metal-debug`,
+      311/311; smudge verified by `ws doctor`.)
 - [x] W4 `ws feature` / `ws done` / `ws list`. Gate: `ws feature scratch` creates worktree +
       tmux window with a live session; `ws done scratch` leaves `git worktree list` clean.
 - [ ] W5 follow-up bernini PR: slim bcp-feature § 1/§ 5 to checkout-agnostic wording.
@@ -98,6 +99,10 @@ checkout, its open PRs.
 - [ ] W6 drain the old clones: push `bernini-v3`'s TAA branch; rehome `bernini`'s webgpu stash;
       `bernini-v2` goes last — it owns PR #303 and the in-flight feat/vat work until those migrate.
       Gate: nothing unpushed or stashed in any old clone.
+      Progress 2026-08-08: `bernini-v3` drained (pushed `feat/taa-depth-reject-wip`,
+      `feat/taa-seed-freeze-wip`, `backup/chunk-container-full`); old `bernini` drained (stash
+      rehomed as pushed `feat/webgpu-preset-wip`, stash list empty). Only `bernini-v2` remains,
+      by design.
 
 ## In-flight state (2026-08-08)
 
