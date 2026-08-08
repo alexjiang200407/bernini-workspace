@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# ws/list — every live feature: its checkout, its branch, its open PRs.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+git -C "$ROOT/bernini" worktree list
+
+if command -v gh >/dev/null 2>&1; then
+    echo
+    echo "open PRs:"
+    gh pr list --repo alexjiang200407/bernini --state open
+else
+    echo "(gh not installed — PR view skipped)"
+fi

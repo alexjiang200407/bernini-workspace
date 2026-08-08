@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# ws/init — once per machine: clone the repos, then initialize bernini.
+#
+# Clones bernini and bernini-test-project into the workspace root (skipping any
+# that already exist), then runs `just init` in bernini/ — which generates the
+# machine config.json, installs the git hooks, and configures the LFS transfer
+# agent (see bernini/docs/lfs.md).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BERNINI_URL="git@github.com:alexjiang200407/bernini.git"
+TEST_PROJECT_URL="git@github.com:alexjiang200407/bernini-test-project.git"
+
+if [ -d "$ROOT/bernini/.git" ]; then
+    echo "bernini/ already cloned — skipping"
+else
+    git clone "$BERNINI_URL" "$ROOT/bernini"
+fi
+
+if [ -d "$ROOT/bernini-test-project/.git" ]; then
+    echo "bernini-test-project/ already cloned — skipping"
+else
+    git clone "$TEST_PROJECT_URL" "$ROOT/bernini-test-project"
+fi
+
+cd "$ROOT/bernini"
+if command -v just >/dev/null 2>&1; then
+    just init
+else
+    python3 scripts/init.py
+fi

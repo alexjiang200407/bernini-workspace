@@ -1,0 +1,33 @@
+# bernini-workspace — the map
+
+One workspace, several checkouts of the same repo, one Claude session per checkout. PLAN.md holds
+the full design; this file is the map every nested session inherits.
+
+## Layout
+
+- `bernini/` — main clone. Stays on `master`; used for quick fixes and landing. Never park it on a
+  feature branch.
+- `bernini.features/<name>/` — one git worktree per feature, on branch `feat/<name>`. Created and
+  removed only by the `ws` scripts.
+- `bernini-test-project/` — clone of the test project
+  (`git@github.com:alexjiang200407/bernini-test-project.git`).
+- `ws/` — the workspace scripts (below). They run at the workspace root; nobody *works* here.
+
+## If you are a session inside a checkout
+
+Your checkout (`bernini/` or `bernini.features/<name>/`) is your project, but it is one checkout
+among several sharing a single git object store. A branch checked out in a sibling worktree cannot
+be checked out in yours. Do your work in your own checkout; leave worktree creation/removal to the
+`ws` scripts at the root — do not run `git worktree` yourself.
+
+## Scripts (invoked from the workspace root)
+
+- `ws/init` — once per machine: clone `bernini` and `bernini-test-project`, then run `just init` in
+  `bernini/` (machine `config.json`, git hooks, LFS transfer agent — see `bernini/docs/lfs.md`).
+- `ws/feature <name> ["<prompt>"]` — worktree at `bernini.features/<name>` on `feat/<name>`
+  (resumes if the branch exists), seeded with `config.json` and worktree-scoped `bernini.feature`
+  config, then a tmux window running `claude "bcp-feature <name> <prompt>"`. Set `WS_NO_AGENT=1`
+  to create the worktree without launching the agent.
+- `ws/done <name>` — remove the worktree, kill the tmux window, delete `feat/<name>`. Refuses a
+  dirty worktree or an unmerged branch rather than forcing.
+- `ws/list` — worktrees alongside open PRs: every live feature, its checkout, its PR state.

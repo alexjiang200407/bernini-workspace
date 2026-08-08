@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# ws/feature <name> ["<prompt>"] — worktree + agent for a feature.
+#
+# Creates bernini.features/<name> on feat/<name> (branched from origin/master,
+# or resumed if the branch already exists), seeds it with the machine
+# config.json and the worktree-scoped bernini.feature config, then opens a tmux
+# window running a claude session on the feature. WS_NO_AGENT=1 skips the tmux
+# step and only prepares the worktree.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+NAME="${1:?usage: ws/feature <name> [\"<prompt>\"]}"
+PROMPT="${2-}"
+BRANCH="feat/$NAME"
+WT="$ROOT/bernini.features/$NAME"
+
+git -C "$ROOT/bernini" fetch origin
+
+if [ -d "$WT" ]; then
+    echo "worktree $WT already exists — resuming"
+elif git -C "$ROOT/bernini" show-ref --verify --quiet "refs/heads/$BRANCH" ||
+     git -C "$ROOT/bernini" show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+    # Resume: the branch exists (locally, or on origin — worktree add DWIMs a
+    # tracking branch from origin/<branch> when only the remote has it).
+    git -C "$ROOT/bernini" worktree add "$WT" "$BRANCH"
+else
+    git -C "$ROOT/bernini" worktree add "$WT" -b "$BRANCH" origin/master
+fi
+
+# Worktree init: machine config (git-ignored) plus the worktree-scoped feature
+# marker that bcp-feature's tooling reads.
+if [ -f "$ROOT/bernini/scripts/config.json" ]; then
+    cp "$ROOT/bernini/scripts/config.json" "$WT/scripts/config.json"
+fi
+git -C "$WT" config extensions.worktreeConfig true
+git -C "$WT" config --worktree bernini.feature "$BRANCH"
+
+if [ "${WS_NO_AGENT-}" = "1" ]; then
+    echo "WS_NO_AGENT=1 — worktree ready at $WT, no agent launched"
+    exit 0
+fi
+
+# Interactive tmux, not `claude -p`: bcp-feature's backgrounded watch-pr needs a
+# live session to wake.
+CMD="claude $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
+if tmux has-session 2>/dev/null; then
+    tmux new-window -c "$WT" -n "$NAME" "$CMD"
+else
+    tmux new-session -d -s ws -c "$WT" -n "$NAME" "$CMD"
+    echo "started detached tmux session 'ws' — attach with: tmux attach -t ws"
+fi
