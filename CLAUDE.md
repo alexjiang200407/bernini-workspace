@@ -29,7 +29,7 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   Idempotent: existing clones and an existing `config.json` are skipped.
 - `ws doctor` — health check: platform, tools, clones, init state, LFS smudge, worktree seeding.
   Exits non-zero on FAILs.
-- `ws feature <name> ["<prompt>"] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
+- `ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
   `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
   `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
@@ -42,9 +42,16 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   asks whether to resume (and whether to compact first), while non-interactive runs start
   fresh. A terminal run auto-attaches to the new agent's window (`Ctrl-b d` to step out);
   non-interactive runs return immediately. If the feature's agent is already running, a terminal
-  run attaches to it instead of starting a second one. Set `WS_NO_AGENT=1` to create the worktree without launching the agent.
+  run attaches to it instead of starting a second one. `--no-agent` (or `WS_NO_AGENT=1`) creates the
+  worktree without launching an agent — a checkout to build and run the editor in.
+  `--branch <b>` borrows an existing branch (it must already exist) instead of `feat/<name>`: the
+  cross-platform debug case, where a fix written on Windows has to be built on the mac. A borrowed
+  checkout is not ws's: `ws done` removes the worktree but leaves the branch, `bernini.feature` is
+  left empty so the diff base stays `origin/master`, and a fresh worktree is fast-forwarded to
+  `origin/<b>` so you never debug a stale local ref.
 - `ws attach [<name>]` — attach to the `ws` tmux session to watch the agents (optionally one
   feature's window); detach with `Ctrl-b d`.
-- `ws done <name>` — remove the worktree, kill the tmux window, delete `feat/<name>`. Refuses a
-  dirty worktree or an unmerged branch rather than forcing.
+- `ws done <name>` — remove the worktree, kill the tmux window, delete the branch ws created for it
+  (a borrowed branch is left alone). Refuses a dirty worktree or an unmerged branch rather than
+  forcing.
 - `ws list` — worktrees alongside open PRs: every live feature, its checkout, its PR state.

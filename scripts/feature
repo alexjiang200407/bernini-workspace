@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--model <m>] [--continue] — worktree + agent for a feature.
+# ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent] — worktree + agent for a feature.
 #
 # Creates bernini.features/<name> on feat/<name> (branched from origin/master,
 # or resumed if the branch already exists), seeds it with the machine
 # config.json and the worktree-scoped bernini.feature config, then opens a tmux
 # window running a claude session on the feature. --preset gives the worktree
 # its own build preset (e.g. a vulkan preset while the main clone builds dx12).
-# WS_NO_AGENT=1 skips the tmux step and only prepares the worktree.
+#
+# --branch <b> borrows an existing branch instead: bernini is multi-platform, so
+# a fix written on Windows often has to be built and debugged on the mac. A
+# borrowed branch is the other machine's, not ws's — ws done leaves it alone,
+# and it is not written into bernini.feature (see the seeding block below).
+# --no-agent (or WS_NO_AGENT=1) prepares the worktree and stops: a checkout to
+# compile and run the editor in needs no agent.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-USAGE='usage: ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--model <m>] [--continue]'
+USAGE='usage: ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]'
 NAME="${1:?$USAGE}"
 shift
 PROMPT=""
 PRESET=""
 CONTINUE=""
+# An existing branch to borrow. Empty means ws's own feat/<name>.
+BRANCH_OPT=""
+NO_AGENT="${WS_NO_AGENT-}"
 # The model the agent runs on. Empty means claude's own configured default; a
 # fresh session at a terminal is asked which one instead (see below).
 MODEL=""
@@ -25,6 +34,8 @@ MODEL=""
 MODE="bypassPermissions"
 while [ $# -gt 0 ]; do
     case "$1" in
+        --branch | -b) BRANCH_OPT="${2:?--branch needs a value}"; shift 2 ;;
+        --no-agent) NO_AGENT=1; shift ;;
         --preset) PRESET="${2:?--preset needs a value}"; shift 2 ;;
         --mode) MODE="${2:?--mode needs a value}"; shift 2 ;;
         --model) MODEL="${2:?--model needs a value}"; shift 2 ;;
@@ -42,22 +53,65 @@ if tmux list-windows -t ws -F '#W' 2>/dev/null | grep -qx "$NAME"; then
     echo "an agent for $NAME is already running — view it with: ws attach $NAME"
     exit 0
 fi
-BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"
 
 git -C "$ROOT/bernini" fetch origin
 
+# <name> is the key — the directory, the tmux window, the ws done argument —
+# and the branch is a separate thing, because a borrowed branch name carries
+# slashes that neither the layout nor `tmux -t ws:<name>` can take.
+have_branch() {
+    git -C "$ROOT/bernini" show-ref --verify --quiet "refs/heads/$1" ||
+        git -C "$ROOT/bernini" show-ref --verify --quiet "refs/remotes/origin/$1"
+}
+
 EXISTED=""
+BORROWED=""
 if [ -d "$WT" ]; then
     echo "worktree $WT already exists — resuming"
     EXISTED=1
-elif git -C "$ROOT/bernini" show-ref --verify --quiet "refs/heads/$BRANCH" ||
-     git -C "$ROOT/bernini" show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+    # The worktree's branch wins over the default: resuming a borrowed checkout
+    # must not be read as a request to move it onto feat/<name>.
+    BRANCH="$(git -C "$WT" rev-parse --abbrev-ref HEAD)"
+    if [ -n "$BRANCH_OPT" ] && [ "$BRANCH_OPT" != "$BRANCH" ]; then
+        echo "worktree $WT is on $BRANCH, not $BRANCH_OPT — switch it by hand, or use another <name>" >&2
+        exit 1
+    fi
+    [ "$(git -C "$WT" config --worktree --get bernini.wsBorrowed 2>/dev/null || true)" = "true" ] && BORROWED=1
+elif [ -n "$BRANCH_OPT" ]; then
+    # Borrowing: the branch is the point, so it has to already exist. Creating
+    # one here would silently give you an empty branch off master and a
+    # "nothing to debug" mystery.
+    BRANCH="$BRANCH_OPT"
+    BORROWED=1
+    if ! have_branch "$BRANCH"; then
+        echo "no branch $BRANCH locally or on origin — push it from the other machine first, or drop --branch to start feat/$NAME" >&2
+        exit 1
+    fi
+    git -C "$ROOT/bernini" worktree add "$WT" "$BRANCH"
+elif have_branch "feat/$NAME"; then
     # Resume: the branch exists (locally, or on origin — worktree add DWIMs a
     # tracking branch from origin/<branch> when only the remote has it).
+    BRANCH="feat/$NAME"
     git -C "$ROOT/bernini" worktree add "$WT" "$BRANCH"
 else
+    BRANCH="feat/$NAME"
     git -C "$ROOT/bernini" worktree add "$WT" -b "$BRANCH" origin/master
+fi
+
+# A branch shared with another machine goes stale locally without looking it:
+# worktree add reuses the local ref, so a fix pushed from Windows is simply not
+# there and you debug yesterday's code. A fresh worktree has nothing to lose, so
+# it is fast-forwarded; an existing one might, so it is only told.
+if git -C "$WT" rev-parse --verify --quiet "origin/$BRANCH" >/dev/null; then
+    BEHIND="$(git -C "$WT" rev-list --count "HEAD..origin/$BRANCH")"
+    if [ "$BEHIND" -gt 0 ]; then
+        if [ -z "$EXISTED" ] && git -C "$WT" merge --ff-only -q "origin/$BRANCH" 2>/dev/null; then
+            echo "fast-forwarded $BRANCH to origin/$BRANCH ($BEHIND commit(s) from another checkout)"
+        else
+            echo "warning: $BRANCH is $BEHIND commit(s) behind origin/$BRANCH — git -C $WT pull --ff-only"
+        fi
+    fi
 fi
 
 # Worktree init: machine config (git-ignored) plus the worktree-scoped feature
@@ -75,7 +129,23 @@ if [ -f "$ROOT/bernini/.claude/features/$NAME.md" ] && [ ! -f "$WT/.claude/featu
     echo "moved parked tracker bernini/.claude/features/$NAME.md into the worktree"
 fi
 git -C "$WT" config extensions.worktreeConfig true
-git -C "$WT" config --worktree bernini.feature "$BRANCH"
+# What ws itself needs at teardown: the branch this checkout is on, and whether
+# ws made it. ws done deletes only what ws created.
+git -C "$WT" config --worktree bernini.wsBranch "$BRANCH"
+git -C "$WT" config --worktree bernini.wsBorrowed "$([ -n "$BORROWED" ] && echo true || echo false)"
+if [ -n "$BORROWED" ]; then
+    # bernini.feature is the precheck's diff base (origin/$FEATURE), not a label.
+    # A borrowed branch is the thing under the microscope, not the base it is
+    # measured against — set it here and a precheck diffs the branch against
+    # itself and reports a clean slice. Empty, the base is origin/master.
+    #
+    # Empty rather than unset, because unset only clears this worktree's copy:
+    # a stray bernini.feature in the shared .git/config would show through, and
+    # the precheck (`${FEATURE:-master}`) reads empty and unset the same way.
+    git -C "$WT" config --worktree bernini.feature ""
+else
+    git -C "$WT" config --worktree bernini.feature "$BRANCH"
+fi
 
 # The seeded config.json carries the machine default preset; a feature that
 # wants a different one re-inits its own copy. init.py re-derives the
@@ -84,8 +154,9 @@ if [ -n "$PRESET" ]; then
     (cd "$WT" && python3 scripts/init.py --preset "$PRESET" --force --no-bot)
 fi
 
-if [ "${WS_NO_AGENT-}" = "1" ]; then
-    echo "WS_NO_AGENT=1 — worktree ready at $WT, no agent launched"
+if [ -n "$NO_AGENT" ]; then
+    echo "worktree ready at $WT on $BRANCH — no agent launched"
+    echo "build it there: cd $WT && just build && just run <target>   (ws done $NAME removes it)"
     exit 0
 fi
 
@@ -137,6 +208,11 @@ if [ -n "$COMPACT" ]; then
     CMD="$CMD --continue '/compact'"
 elif [ -n "$CONTINUE" ]; then
     CMD="$CMD --continue${PROMPT:+ $(printf '%q' "$PROMPT")}"
+elif [ -n "$BORROWED" ]; then
+    # A borrowed branch is someone else's feature, mid-flight. bcp-feature would
+    # open a feature workflow on top of it; the session gets the prompt as given
+    # (or nothing) and whoever is debugging says what they want.
+    CMD="$CMD${PROMPT:+ $(printf '%q' "$PROMPT")}"
 else
     CMD="$CMD $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
 fi

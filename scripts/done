@@ -2,14 +2,30 @@
 # ws done <name> — tear down a feature: worktree, tmux window, branch.
 #
 # Mirrors ws/feature. Refuses to remove a dirty worktree or delete an unmerged
-# branch — force those by hand if that is really what you want.
+# branch — force those by hand if that is really what you want. A borrowed
+# branch (ws feature --branch) is not ws's to delete: the worktree and window
+# go, the branch stays.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NAME="${1:?usage: ws done <name>}"
-BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"
+
+# Read the worktree's own record before removing it — afterwards there is
+# nothing left to ask. Worktrees made before ws recorded this fall back to the
+# old convention, which is what they were created with.
+BRANCH=""
+BORROWED=""
+if [ -d "$WT" ]; then
+    BRANCH="$(git -C "$WT" config --worktree --get bernini.wsBranch 2>/dev/null || true)"
+    [ "$(git -C "$WT" config --worktree --get bernini.wsBorrowed 2>/dev/null || true)" = "true" ] && BORROWED=1
+fi
+BRANCH="${BRANCH:-feat/$NAME}"
 
 git -C "$ROOT/bernini" worktree remove "$WT"
 tmux kill-window -t "ws:$NAME" 2>/dev/null || true
-git -C "$ROOT/bernini" branch -d "$BRANCH"
+if [ -n "$BORROWED" ]; then
+    echo "removed the worktree; left $BRANCH alone (borrowed — delete it by hand if you want it gone)"
+else
+    git -C "$ROOT/bernini" branch -d "$BRANCH"
+fi

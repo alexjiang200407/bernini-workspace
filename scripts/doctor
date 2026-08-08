@@ -71,11 +71,21 @@ if [ -d "$ROOT/bernini/.git" ]; then
     if git -C "$ROOT/bernini" worktree list --porcelain | grep -q '^prunable'; then
         warn "stale worktree registrations — run: git -C bernini worktree prune"
     fi
+    # bernini.feature is the precheck's diff base and must be worktree-scoped.
+    # In the shared .git/config it is every checkout's base — the main clone on
+    # master included, which then reviews master against someone's feature.
+    if leaked="$(git -C "$ROOT/bernini" config --local --get bernini.feature 2>/dev/null)"; then
+        fail "bernini.feature=$leaked is in the shared .git/config — every worktree inherits it as a diff base; run: git -C bernini config --unset bernini.feature"
+    fi
     for wt in "$ROOT"/bernini.features/*/; do
         [ -d "$wt" ] || continue
         name="$(basename "$wt")"
         [ -f "$wt/scripts/config.json" ] || warn "worktree $name has no scripts/config.json (re-run ws feature $name)"
-        if ! git -C "$wt" config --worktree bernini.feature >/dev/null 2>&1; then
+        # A borrowed-branch checkout leaves bernini.feature unset on purpose —
+        # the branch is what is being debugged, not a diff base.
+        if [ "$(git -C "$wt" config --worktree --get bernini.wsBorrowed 2>/dev/null || true)" = "true" ]; then
+            ok "worktree $name borrows $(git -C "$wt" config --worktree --get bernini.wsBranch 2>/dev/null || echo '?')"
+        elif ! git -C "$wt" config --worktree bernini.feature >/dev/null 2>&1; then
             warn "worktree $name has no bernini.feature config (re-run ws feature $name)"
         fi
     done

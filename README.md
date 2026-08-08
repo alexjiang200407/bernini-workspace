@@ -56,13 +56,13 @@ are still pointer text, stale worktree registrations, per-worktree seeding, and 
 symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
 inside it.
 
-### `ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--model <m>] [--continue]`
+### `ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]`
 
 Starts (or resumes) a feature:
 
 1. Fetches origin, then adds a worktree at `bernini.features/<name>` on branch `feat/<name>` —
    branched from `origin/master`, or reused as-is if the branch already exists locally or on
-   origin (resume).
+   origin (resume). `--branch <b>` borrows an existing branch instead (see below).
 2. Seeds the worktree: copies the machine `scripts/config.json` in, sets the worktree-scoped
    `bernini.feature` git config, and moves in any tracker parked at
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
@@ -87,7 +87,35 @@ vulkan), so `--preset <p>` re-inits the worktree's own copy with that preset: `i
 the preset-dependent fields and carries the stored LFS credential across, and no other checkout is
 touched. The same works by hand at any time: `just init --preset <p> --force` inside the worktree.
 
-Set `WS_NO_AGENT=1` to stop after step 2 and get a prepared worktree with no agent.
+`--no-agent` (or `WS_NO_AGENT=1`) stops after step 2 and leaves a prepared worktree with no agent —
+a checkout to build and run the editor in, nothing more.
+
+#### Borrowing a branch: `--branch <b>`
+
+bernini is multi-platform, so a fix written on Windows often has to be built and debugged on the
+mac. `ws feature macdebug --branch feat/culling --no-agent` gives that branch its own checkout here
+without ws pretending it owns it:
+
+- **The branch must already exist** locally or on origin. `--branch` never creates one — a new
+  branch off master would build clean and debug nothing, so it is an error instead.
+- **`ws done` leaves it alone.** The worktree records `bernini.wsBorrowed=true`, and teardown
+  removes the worktree and tmux window but never the branch. Delete it by hand if you want it gone.
+- **`bernini.feature` is left empty**, so the diff base stays `origin/master`. That config is the
+  precheck's base (`origin/$FEATURE`), not a label: point it at the branch you are debugging and a
+  precheck diffs the branch against itself and reports a clean slice.
+- **Staleness is handled.** `git worktree add` reuses the *local* ref, so a branch the other machine
+  has pushed to since is silently old — the fix you came to test simply isn't there. A fresh
+  worktree is fast-forwarded to `origin/<b>` (nothing local to lose) and says so; an existing one is
+  warned about instead.
+- **An agent, if you start one, gets no `bcp-feature` prompt** — that would open a feature workflow
+  on top of someone else's in-flight branch. It gets your prompt, or a bare session.
+- `<name>` stays the key (directory, tmux window, `ws done` argument) and is independent of the
+  branch — branch names carry slashes that neither the layout nor `tmux -t ws:<name>` can take.
+
+Two things `--branch` cannot do. It cannot check out `master` (the main clone holds it, and git
+refuses a branch that is checked out elsewhere) — build master in `bernini/` itself. And it does
+nothing about the branch now moving on two machines: commit and push from whichever one you fixed
+it on, and pull before continuing on the other.
 
 ### `ws attach [<name>]`
 
@@ -106,8 +134,13 @@ keyboard's.
 ### `ws done <name>`
 
 Tears the feature down: removes the worktree (the git-ignored tracker and worktree config die with
-it), kills the tmux window, deletes `feat/<name>`. Refuses a dirty worktree or an unmerged branch
-rather than forcing — override by hand if that is really what you want.
+it), kills the tmux window, deletes the branch ws created for it. Refuses a dirty worktree or an
+unmerged branch rather than forcing — override by hand if that is really what you want. A borrowed
+branch (`ws feature --branch`) is not ws's to delete: the worktree and window go, the branch stays.
+
+Removing the worktree deletes everything in it, git-ignored content included — that includes the
+`build*/` tree, so a debug checkout costs a full rebuild if you bring it back. (Untracked files that
+are *not* ignored make `git worktree remove` refuse outright; clean them up or force by hand.)
 
 ## Stopping and resuming a feature
 
