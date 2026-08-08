@@ -34,8 +34,10 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
   is per-checkout; the preset in it is a choice, not machine state). `--mode` sets the agent's
-  permission mode (default `acceptEdits`, never inherited). Set `WS_NO_AGENT=1` to create the
-  worktree without launching the agent.
+  permission mode (default `acceptEdits`, never inherited). `--continue` resumes the worktree's
+  previous claude conversation instead of starting fresh — the recovery path after an agent
+  exited or the machine rebooted. Refuses to start a second agent for a feature that has one
+  running. Set `WS_NO_AGENT=1` to create the worktree without launching the agent.
 - `ws attach [<name>]` — attach to the `ws` tmux session to watch the agents (optionally one
   feature's window); detach with `Ctrl-b d`.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete `feat/<name>`. Refuses a

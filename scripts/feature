@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] — worktree + agent for a feature.
+# ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--continue] — worktree + agent for a feature.
 #
 # Creates bernini.features/<name> on feat/<name> (branched from origin/master,
 # or resumed if the branch already exists), seeds it with the machine
@@ -10,11 +10,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-USAGE='usage: ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>]'
+USAGE='usage: ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--continue]'
 NAME="${1:?$USAGE}"
 shift
 PROMPT=""
 PRESET=""
+CONTINUE=""
 # The agent's permission mode. Never bypassPermissions by inheritance: edits
 # flow, but Bash and gh still stop at a prompt until someone attaches.
 MODE="acceptEdits"
@@ -22,9 +23,16 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --preset) PRESET="${2:?--preset needs a value}"; shift 2 ;;
         --mode) MODE="${2:?--mode needs a value}"; shift 2 ;;
+        --continue | -c) CONTINUE=1; shift ;;
         *) PROMPT="$1"; shift ;;
     esac
 done
+
+# One agent per feature: a second launch would shadow the window ws done kills.
+if tmux list-windows -t ws -F '#W' 2>/dev/null | grep -qx "$NAME"; then
+    echo "an agent for $NAME is already running — view it with: ws attach $NAME" >&2
+    exit 1
+fi
 BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"
 
@@ -72,8 +80,15 @@ fi
 
 # Interactive tmux, not `claude -p`: bcp-feature's backgrounded watch-pr needs a
 # live session to wake. Every agent window lives in the `ws` session, so
-# ws attach always finds them.
-CMD="claude --permission-mode $(printf '%q' "$MODE") $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
+# ws attach always finds them. --continue resumes the worktree's previous
+# conversation (each worktree is its own claude project) instead of starting
+# the bcp-feature prompt fresh.
+CMD="claude --permission-mode $(printf '%q' "$MODE")"
+if [ -n "$CONTINUE" ]; then
+    CMD="$CMD --continue${PROMPT:+ $(printf '%q' "$PROMPT")}"
+else
+    CMD="$CMD $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
+fi
 if tmux has-session -t ws 2>/dev/null; then
     tmux new-window -t ws: -c "$WT" -n "$NAME" "$CMD"
 else

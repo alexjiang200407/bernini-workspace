@@ -56,7 +56,7 @@ are still pointer text, stale worktree registrations, per-worktree seeding, and 
 symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
 inside it.
 
-### `ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>]`
+### `ws feature <name> ["<prompt>"] [--preset <p>] [--mode <m>] [--continue]`
 
 Starts (or resumes) a feature:
 
@@ -84,15 +84,49 @@ Set `WS_NO_AGENT=1` to stop after step 2 and get a prepared worktree with no age
 ### `ws attach [<name>]`
 
 Watch the agents: attaches to the `ws` tmux session, optionally jumping straight to one feature's
-window. Detach with `Ctrl-b d` (the agents keep running); `Ctrl-b n`/`Ctrl-b p` cycle between
-feature windows and `Ctrl-b w` lists them. For a non-interactive peek at what an agent is doing,
+window. The window is the agent's live interactive session — you can type instructions, approve
+permission prompts, or interrupt it directly. `Ctrl-b n`/`Ctrl-b p` cycle between feature windows
+and `Ctrl-b w` lists them. For a non-interactive peek at what an agent is doing,
 `tmux capture-pane -p -t ws:<name>` prints its screen.
+
+**Leaving: detach, don't exit.** `Ctrl-b d` detaches — your terminal comes back and the agent
+keeps running; reattach any time. Closing your terminal window amounts to the same thing. But
+`Ctrl-d` / typing `exit` go to the Claude session *inside* the window and end the agent (recover
+with `ws feature <name> --continue` — see below). Ending an agent is `ws done`'s job, not the
+keyboard's.
 
 ### `ws done <name>`
 
 Tears the feature down: removes the worktree (the git-ignored tracker and worktree config die with
 it), kills the tmux window, deletes `feat/<name>`. Refuses a dirty worktree or an unmerged branch
 rather than forcing — override by hand if that is really what you want.
+
+## Stopping and resuming a feature
+
+A feature's state lives in layers, and each survives different things:
+
+| State | Where | Survives |
+|---|---|---|
+| commits on `feat/<name>` | git (shared object store; origin once pushed) | everything (once pushed) |
+| uncommitted edits | the worktree | agent exit, reboot — anything but `ws done` / disk loss |
+| the bcp-feature tracker | `<worktree>/.claude/features/<name>.md` (git-ignored) | same as the worktree |
+| the agent's conversation | claude's per-project history for that worktree | agent exit, reboot |
+
+So an agent that exited, crashed, or was lost to a reboot has destroyed nothing. To recover:
+
+- **`ws feature <name> --continue`** — reuses the worktree and resumes the worktree's previous
+  claude conversation, full context restored (each worktree is its own claude project, so
+  `--continue` finds the right history). Add a prompt to say what to do next:
+  `ws feature vat --continue "picking up after reboot — check watch-pr state"`.
+- **`ws feature <name>`** (plain) — same worktree, but a *fresh* conversation started on the
+  bcp-feature prompt. The skill re-derives where it was from the tracker and the PR state; use
+  this when the old conversation isn't worth carrying (it was compacted, confused, or ancient).
+
+The one thing with no second copy is the worktree itself: the tracker and uncommitted edits die
+with it. That is `ws done`'s refusal semantics — it will not remove a dirty worktree or delete an
+unmerged branch, so finished work must be pushed (or force-discarded by hand) before teardown
+succeeds. A feature that must survive the *machine* needs its branch pushed; the tracker is
+machine-local by design.
 
 ### `ws list`
 
