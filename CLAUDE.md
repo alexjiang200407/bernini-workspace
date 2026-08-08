@@ -29,6 +29,12 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   Idempotent: existing clones and an existing `config.json` are skipped.
 - `ws doctor` — health check: platform, tools, clones, init state, LFS smudge, worktree seeding.
   Exits non-zero on FAILs.
+- `ws completions [<zsh|bash>] [--install]` — print the shell completion script; `--install` writes
+  it to a directory on the shell's real `$fpath` (asked of an interactive zsh, not guessed) and
+  `ws doctor` reports it — once per machine, then a new shell. Both shims ask `ws __complete` for
+  candidates, and it derives them from `scripts/`, the worktrees and git — so a new command or flag
+  completes without a completion file being touched. Scripts named `_*` are plumbing: routable,
+  hidden from usage.
 - `ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
   `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
   `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.

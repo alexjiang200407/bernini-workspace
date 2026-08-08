@@ -30,6 +30,13 @@ hand, link `ws` from any directory on your PATH:
 ln -s "$PWD/ws" ~/.local/bin/ws
 ```
 
+Then install tab completion once (see [`ws completions`](#ws-completions-zshbash---install) below),
+and open a new shell:
+
+```sh
+ws completions --install
+```
+
 ## Commands
 
 `./ws` with no arguments lists these. `ws` is a thin dispatcher; the implementations live in
@@ -55,6 +62,38 @@ rejected), required tools (`git`, `python3`, `tmux`, `claude`, `git-lfs`), the c
 are still pointer text, stale worktree registrations, per-worktree seeding, and the `ws` PATH
 symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
 inside it.
+
+### `ws completions [<zsh|bash>] [--install]`
+
+Prints the completion script for a shell (yours, unless you name one). `--install` puts it where
+that shell will find it, which is the whole reason the flag exists: zsh only autoloads `_ws` from a
+directory on its `$fpath`, and `$fpath` is whatever your config makes it — a Homebrew
+`site-functions` directory is on it only if something added it, while oh-my-zsh contributes its own
+`custom/completions`. So `--install` asks an interactive zsh what its `$fpath` actually is and
+writes into a directory from that list, preferring one no package manager or framework update will
+overwrite. Then open a new shell. `ws doctor` reports where the file is — and warns if one exists
+somewhere `$fpath` never looks, which completes nothing and looks exactly like no completion at all
+(zsh quietly falls back to completing filenames).
+
+Only the shim is installed. Everything that knows about ws lives in `ws __complete`, in the repo,
+so new commands, flags and features complete without reinstalling anything.
+
+What completes: the commands, described by their one-line headers; live features for `attach`,
+`done` and `cmd`, each shown with the branch its checkout is on; for `ws feature`, those plus the
+`feat/*` branches that have *no* worktree — the resumable ones, minus any branch already checked
+out somewhere, which git would refuse anyway; branch names for `--branch`; for `--preset`, the
+presets this host can actually select (bernini's own answer, so a mac is never offered the
+`windows-*` half of `CMakePresets.json`); and the fixed sets for `--mode` and `--model`.
+
+Past `ws cmd <name> --`, completion hands the line back to the shell's ordinary command completion,
+run **inside that checkout** — `ws cmd vat -- cat apps/edi⇥` completes against the worktree, not
+against your current directory. zsh does this properly; bash needs `bash-completion` for the
+handoff, and macOS's stock bash 3.2 falls back to command names and plain filenames.
+
+The shims are thin on purpose: both ask `ws __complete` what to offer. One implementation, so the
+shells cannot drift apart, and a new script in `scripts/` completes the moment it lands — there is
+no list of commands or flags to keep in sync. Scripts named `_*` are plumbing: routable
+(`ws __complete`), hidden from `ws` usage.
 
 ### `ws feature <name> ["<prompt>"] [--branch <b>] [--preset <p>] [--mode <m>] [--model <m>] [--continue] [--no-agent]`
 

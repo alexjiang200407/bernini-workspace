@@ -101,6 +101,29 @@ else
     ok "ws on PATH -> this workspace"
 fi
 
+# Shell completion, installed once per machine like ws itself. An _ws file only
+# counts if zsh searches the directory it is in, so the interactive $fpath is
+# the thing to ask — a file dropped somewhere plausible but unlisted (a
+# Homebrew site-functions directory this config never adds) completes nothing.
+comp=""
+if command -v zsh >/dev/null 2>&1; then
+    while read -r d; do
+        [ -n "$d" ] && [ -e "$d/_ws" ] && comp="$d/_ws" && break
+    done < <(zsh -i -c 'print -l $fpath' 2>/dev/null)
+    stray="$(ls -d /opt/homebrew/share/zsh/site-functions/_ws /usr/local/share/zsh/site-functions/_ws \
+        "$HOME/.zfunc/_ws" 2>/dev/null | head -1)"
+fi
+if [ -z "$comp" ] && grep -qs 'ws completions' "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; then
+    comp="a shell rc"
+fi
+if [ -n "$comp" ]; then
+    ok "shell completion installed ($comp)"
+elif [ -n "${stray-}" ]; then
+    warn "$stray is not on zsh's fpath, so it completes nothing — re-run: ws completions --install"
+else
+    warn "no shell completion — run: ws completions --install"
+fi
+
 echo
 if [ "$FAILS" -gt 0 ]; then
     echo "$FAILS problem(s), $WARNS warning(s)"

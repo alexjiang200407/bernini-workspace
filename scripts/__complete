@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# ws __complete <cword> [word...] — completion candidates for the shell shims.
+#
+# The one implementation behind every shell: `ws completions <shell>` prints a
+# thin shim that asks this script what to offer, so the candidates cannot drift
+# apart per shell, and a new script in scripts/ becomes completable the moment
+# it lands (the command list is read from there, like the dispatcher's usage).
+#
+# Protocol: argv is the command line as the shell sees it — word 0 is `ws` —
+# with <cword> the 0-based index of the word being completed. Output is one
+# candidate per line, *unfiltered*: the shell filters by the prefix it is
+# completing, which is what lets zsh do its own case-insensitive and substring
+# matching. An optional tab-separated second field is a description (zsh shows
+# it, bash drops it).
+#
+# One case cannot be answered here. `ws cmd <name> -- <command>` should complete
+# the wrapped command the way the shell would at a bare prompt, and only the
+# shell knows how (_normal in zsh, _command_offset in bash). The single line
+#     :delegate <index> <dir>
+# hands that back: <index> is where the wrapped command starts in argv, and
+# <dir> is the checkout it will run in, so the shim can resolve its paths
+# against the directory the command will really see.
+#
+# Not set -e: a completion that hits a snag offers nothing, it does not spray
+# errors over the prompt.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CWORD="${1-0}"
+[ $# -gt 0 ] && shift
+WORDS=("$@")
+
+CUR="${WORDS[$CWORD]-}"
+PREV=""
+[ "$CWORD" -gt 0 ] && PREV="${WORDS[$((CWORD - 1))]-}"
+
+emit() {
+    if [ -n "${2-}" ]; then
+        printf '%s\t%s\n' "$1" "$2"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
+# The commands are the scripts, as in the dispatcher's usage; `_`-prefixed ones
+# are plumbing like this script and stay out of both lists.
+commands() {
+    local f name header
+    for f in "$ROOT"/scripts/*; do
+        [ -x "$f" ] || continue
+        name="${f##*/}"
+        case "$name" in _*) continue ;; esac
+        header="$(sed -n '2s/^# *//p' "$f")"
+        emit "$name" "${header#*— }"
+    done
+}
+
+# Live features, described by the branch each checkout is on — which is the
+# thing you actually want to see when picking between them.
+features() {
+    local d name branch
+    for d in "$ROOT"/bernini.features/*/; do
+        [ -d "$d" ] || continue
+        name="${d%/}"
+        name="${name##*/}"
+        # Where the checkout is now, not the bernini.wsBranch ws recorded when
+        # it made it: that one is teardown metadata, and a checkout that has
+        # since moved would be described as the branch it left behind.
+        branch="$(git -C "$d" symbolic-ref --quiet --short HEAD 2>/dev/null || echo 'detached HEAD')"
+        emit "$name" "$branch"
+    done
+}
+
+# feat/* branches with no worktree: `ws feature <name>` on one of these resumes
+# it, so they belong in that completion next to the live ones. A branch already
+# checked out somewhere is not one of them — git refuses a second worktree on
+# it, and the worktree it sits in need not be named after it (a feature named
+# `vat` on feat/vat-animation-import).
+resumable() {
+    local b name checked_out
+    checked_out="$(git -C "$ROOT/bernini" worktree list --porcelain 2>/dev/null |
+        sed -n 's|^branch refs/heads/||p')"
+    git -C "$ROOT/bernini" for-each-ref --format='%(refname:short)' \
+        'refs/heads/feat/*' 'refs/remotes/origin/feat/*' 2>/dev/null |
+        sed -e 's|^origin/||' | sort -u |
+        while read -r b; do
+            name="${b#feat/}"
+            [ -d "$ROOT/bernini.features/$name" ] && continue
+            printf '%s\n' "$checked_out" | grep -qxF "$b" && continue
+            emit "$name" "resume $b"
+        done
+}
+
+# --branch takes a plain branch name (ws feature looks it up locally or on
+# origin), so origin/ is stripped rather than offered as part of the name.
+branches() {
+    git -C "$ROOT/bernini" for-each-ref --format='%(refname:short)' \
+        refs/heads refs/remotes/origin 2>/dev/null |
+        sed -e 's|^origin/||' | grep -v '^HEAD$' | sort -u
+}
+
+# The presets a machine can actually choose — bernini's own answer to that
+# question (hidden ones dropped, host conditions applied), so a mac is not
+# offered the windows-* half of CMakePresets.json.
+presets() {
+    [ -d "$ROOT/bernini/scripts" ] || return 0
+    python3 - "$ROOT/bernini/scripts" 2>/dev/null <<'PY' || true
+import sys
+sys.path.insert(0, sys.argv[1])
+import util.cmake_tools as ct
+data, _ = ct.load_presets()
+for p in data.get("configurePresets", []):
+    if not p.get("hidden") and ct.runs_on_host(p["name"]):
+        print(p["name"], p.get("displayName", ""), sep="\t")
+PY
+}
+
+# Mirrors scripts/cmd's name → checkout mapping; keep the two in step.
+checkout_dir() {
+    case "$1" in
+        bernini | master) echo "$ROOT/bernini" ;;
+        *) echo "$ROOT/bernini.features/$1" ;;
+    esac
+}
+
+# How many positional arguments are already in place before the cursor — flags
+# and the values they take don't count. That is what says whether <name> is
+# still open or the caller has moved past it.
+positionals_before() {
+    local i=2 n=0 skip=0 w
+    while [ "$i" -lt "$CWORD" ]; do
+        w="${WORDS[$i]-}"
+        if [ "$skip" = 1 ]; then
+            skip=0
+        else
+            case "$w" in
+                --branch | -b | --preset | --mode | --model) skip=1 ;;
+                -*) ;;
+                *) n=$((n + 1)) ;;
+            esac
+        fi
+        i=$((i + 1))
+    done
+    echo "$n"
+}
+
+if [ "$CWORD" -le 1 ]; then
+    commands
+    exit 0
+fi
+
+case "${WORDS[1]-}" in
+    attach | done)
+        [ "$(positionals_before)" = 0 ] && features
+        ;;
+    cmd)
+        if [ "$(positionals_before)" = 0 ]; then
+            features
+            emit bernini "the main clone"
+        else
+            # `--` is optional, so the wrapped command starts either right after
+            # <name> or right after the `--` that follows it.
+            START=3
+            if [ "$CWORD" -gt 3 ] && [ "${WORDS[3]-}" = "--" ]; then
+                START=4
+            fi
+            printf ':delegate %s %s\n' "$START" "$(checkout_dir "${WORDS[2]-}")"
+        fi
+        ;;
+    feature)
+        case "$PREV" in
+            --branch | -b) branches; exit 0 ;;
+            --preset) presets; exit 0 ;;
+            --mode)
+                emit bypassPermissions "unattended: no prompts (ws feature's default)"
+                emit acceptEdits "edits flow, Bash prompts"
+                emit default "prompt as usual"
+                emit plan "plan mode"
+                exit 0
+                ;;
+            --model)
+                emit opus; emit sonnet; emit haiku
+                exit 0
+                ;;
+        esac
+        # <name> is the only positional worth completing — the prompt after it
+        # is free text.
+        if [ "$(positionals_before)" = 0 ] && [ "${CUR#-}" = "$CUR" ]; then
+            features
+            resumable
+        else
+            emit --branch "borrow an existing branch instead of feat/<name>"
+            emit --preset "re-init this worktree's config.json with another build preset"
+            emit --mode "the agent's permission mode"
+            emit --model "the model a fresh session runs on"
+            emit --continue "resume the worktree's previous conversation"
+            emit --no-agent "prepare the worktree, launch no agent"
+        fi
+        ;;
+    completions)
+        if [ "$(positionals_before)" = 0 ]; then
+            emit zsh
+            emit bash
+        fi
+        ;;
+esac
+exit 0

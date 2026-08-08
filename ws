@@ -15,6 +15,9 @@ usage() {
     echo "commands:"
     for f in "$DIR"/*; do
         [ -x "$f" ] || continue
+        # `_`-prefixed scripts are plumbing (ws __complete): routable, but not
+        # commands anyone types.
+        case "${f##*/}" in _*) continue ;; esac
         # Each script's second line is its one-line header.
         printf '  %s\n' "$(sed -n '2s/^# *//p' "$f")"
     done
