@@ -29,3 +29,9 @@ if command -v just >/dev/null 2>&1; then
 else
     python3 scripts/init.py
 fi
+
+# Put `ws` on PATH so the commands work bare (`ws feature vat`) from anywhere.
+if ! command -v ws >/dev/null 2>&1 && [ -d "$HOME/.local/bin" ]; then
+    ln -s "$ROOT/ws" "$HOME/.local/bin/ws"
+    echo "symlinked ws into ~/.local/bin"
+fi

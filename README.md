@@ -14,10 +14,12 @@ cd bernini-workspace
 ./ws init
 ```
 
-Optionally put `ws` on your PATH so the commands work from anywhere:
+`ws init` also symlinks `ws` into `~/.local/bin` (when that directory exists and nothing named
+`ws` is on PATH already), so the commands work bare — `ws feature vat` from anywhere. To do it by
+hand, link `ws` from any directory on your PATH:
 
 ```sh
-ln -s "$PWD/ws" ~/bin/ws
+ln -s "$PWD/ws" ~/.local/bin/ws
 ```
 
 ## Commands
