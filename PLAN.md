@@ -84,8 +84,9 @@ checkout, its open PRs.
 
 ## Tasks
 
-- [ ] W1 PR #303 merges (repo-side worktree compatibility). Gate: merged; `watchlist.py` roundtrip
-      in a linked worktree.
+- [x] W1 PR #303 merges (repo-side worktree compatibility). Gate: merged; `watchlist.py` roundtrip
+      in a linked worktree. (Merged 2026-08-08 as 83d0672; roundtrip verified in a scratch
+      worktree — state lands in `.git/worktrees/<name>/bernini-pr-watch.json`.)
 - [x] W2 workspace root becomes a repo: `git init`, this file, `CLAUDE.md`, `.gitignore`.
       Gate: a session opened in `bernini/` sees the root `CLAUDE.md` in its context.
       Remote: `git@github.com:alexjiang200407/bernini-workspace.git`.
@@ -96,18 +97,20 @@ checkout, its open PRs.
       tmux window with a live session; `ws done scratch` leaves `git worktree list` clean.
 - [ ] W5 follow-up bernini PR: slim bcp-feature § 1/§ 5 to checkout-agnostic wording.
       Gate: skill text names no workspace paths; a plain-clone run still works.
-- [ ] W6 drain the old clones: push `bernini-v3`'s TAA branch; rehome `bernini`'s webgpu stash;
+      PR #304 open with a watcher on it; both gates verified in the PR content. Ticks when merged.
+- [x] W6 drain the old clones: push `bernini-v3`'s TAA branch; rehome `bernini`'s webgpu stash;
       `bernini-v2` goes last — it owns PR #303 and the in-flight feat/vat work until those migrate.
       Gate: nothing unpushed or stashed in any old clone.
-      Progress 2026-08-08: `bernini-v3` drained (pushed `feat/taa-depth-reject-wip`,
+      Done 2026-08-08: `bernini-v3` drained (pushed `feat/taa-depth-reject-wip`,
       `feat/taa-seed-freeze-wip`, `backup/chunk-container-full`); old `bernini` drained (stash
-      rehomed as pushed `feat/webgpu-preset-wip`, stash list empty). Only `bernini-v2` remains,
-      by design.
+      rehomed as pushed `feat/webgpu-preset-wip`); `bernini-v2` drained — #303 merged, feat/vat
+      migrated to the workspace, and its remaining local-only branches verified as merged-PR
+      remnants (#253, #260, #119 all in master). No stashes anywhere. The clone directories can
+      now be deleted at leisure.
 
-## In-flight state (2026-08-08)
+## In-flight state (2026-08-08, end of day)
 
-- feat/vat is mid-flight in the old `bernini-v2` clone: plan PR #296 in review. Its tracker has
-  moved to `bernini-workspace/bernini/.claude/features/vat.md`; the feature continues from this
-  workspace once W3 is done (its worktree: `ws feature vat` — the branch exists, so no `-b`).
-- PR #303 (worktree compatibility) is open with a watcher on it, owned by the old `bernini-v2`
-  clone until merged.
+- feat/vat continues from this workspace: worktree at `bernini.features/vat` on the merged plan
+  (#296), tracker migrated into it. `ws feature vat` resumes it with an agent.
+- W5's PR #304 is open with a `just watch-pr` watcher; W5 ticks when it merges.
+- The old clones (`~/source/bernini`, `bernini-v2`, `bernini-v3`) are drained and disposable.
