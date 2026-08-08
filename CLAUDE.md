@@ -34,7 +34,7 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   `bernini.feature` config, then a tmux window running `claude "bcp-feature <name> <prompt>"`.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
   is per-checkout; the preset in it is a choice, not machine state). `--mode` sets the agent's
-  permission mode (default `acceptEdits`, never inherited). `--continue` resumes the worktree's
+  permission mode (default `bypassPermissions` — agents run unattended; set, not inherited). `--continue` resumes the worktree's
   previous claude conversation instead of starting fresh — the recovery path after an agent
   exited or the machine rebooted; on an existing worktree without `--continue`, a terminal run
   asks whether to resume (and whether to compact first), while non-interactive runs start

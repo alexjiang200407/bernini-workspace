@@ -68,10 +68,10 @@ Starts (or resumes) a feature:
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
 3. Opens a tmux window (always in the `ws` session, one window per feature) running
    `claude --permission-mode <m> "bcp-feature <name> <prompt>"` in the worktree. The mode defaults
-   to `acceptEdits` — file edits flow, but Bash/gh stop at a permission prompt until someone
-   attaches — and is never inherited from your user config, so a `bypassPermissions` default on
-   your machine does not leak into unattended agents. Pass `--mode` to override (e.g.
-   `--mode bypassPermissions` for a feature you deliberately want fully autonomous). When run at a
+   to `bypassPermissions` — feature agents run unattended, so nothing stops at a prompt; bernini's
+   own guard hooks (`gh pr` blocking, PR-watch) still apply. Pass `--mode` to gate a specific
+   feature instead (e.g. `--mode acceptEdits` lets edits flow but stops Bash at a permission
+   prompt until someone attaches). When run at a
    terminal, it then attaches you straight to the agent's window — `Ctrl-b d` to step back out;
    non-interactive runs just print the window name and return.
 

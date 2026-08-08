@@ -16,9 +16,10 @@ shift
 PROMPT=""
 PRESET=""
 CONTINUE=""
-# The agent's permission mode. Never bypassPermissions by inheritance: edits
-# flow, but Bash and gh still stop at a prompt until someone attaches.
-MODE="acceptEdits"
+# The agent's permission mode. Feature agents run unattended, so the default
+# is full autonomy — set explicitly, not inherited. Gate a specific feature
+# with --mode acceptEdits (edits flow, Bash prompts) or --mode default.
+MODE="bypassPermissions"
 while [ $# -gt 0 ]; do
     case "$1" in
         --preset) PRESET="${2:?--preset needs a value}"; shift 2 ;;
