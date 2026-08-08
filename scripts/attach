@@ -3,6 +3,15 @@
 #
 # Detach again with Ctrl-b d. Inside tmux: Ctrl-b n/p cycles windows (one per
 # feature), Ctrl-b w lists them.
+#
+# Each terminal gets its own *view* session grouped with `ws` rather than
+# attaching to `ws` itself. Two clients of one session share that session's
+# current window, so a second terminal jumping to another feature drags the
+# first one along with it. A grouped session shares the window list (windows
+# ws feature adds appear in it, windows ws done kills disappear from it) but
+# keeps its own selection, so each terminal stays on the agent it asked for.
+# The view is scaffolding: it is killed when its terminal is done with it, and
+# the windows outlive it because they belong to `ws`.
 set -euo pipefail
 
 NAME="${1-}"
@@ -12,9 +21,51 @@ if ! tmux has-session -t ws 2>/dev/null; then
     exit 1
 fi
 
+if [ -n "$NAME" ] && ! tmux list-windows -t ws -F '#W' | grep -qx -- "$NAME"; then
+    echo "no agent window ws:$NAME — ws list shows the live features" >&2
+    exit 1
+fi
+
+# Views whose terminal died without detaching (a closed terminal window, a
+# dropped ssh) are left behind unattached. Reap them here — but only once they
+# are old enough that they cannot be another ws attach in the split second
+# between creating its view and attaching to it.
+NOW="$(date +%s)"
+while read -r VS ATTACHED CREATED; do
+    case "$VS" in ws-view-*) ;; *) continue ;; esac
+    if [ "$ATTACHED" = 0 ] && [ $((NOW - CREATED)) -gt 60 ]; then
+        tmux kill-session -t "=$VS" 2>/dev/null || true
+    fi
+done < <(tmux list-sessions -F '#{session_name} #{session_attached} #{session_created}' 2>/dev/null || true)
+
+# One view per terminal, not per feature: the same agent can be watched from
+# two terminals at once, each with its own selection.
+VIEW="ws-view-$$"
+N=0
+while tmux has-session -t "=$VIEW" 2>/dev/null; do
+    N=$((N + 1))
+    VIEW="ws-view-$$-$N"
+done
+tmux new-session -d -t ws -s "$VIEW"
+if [ -n "$NAME" ]; then
+    tmux select-window -t "$VIEW:$NAME"
+fi
+
 if [ -n "${TMUX-}" ]; then
-    [ -n "$NAME" ] && tmux select-window -t "ws:$NAME"
-    tmux switch-client -t ws
+    # Already inside tmux: hand this client over to the view. destroy-unattached
+    # goes on only *after* the client is there — tmux reaps an unattached
+    # session the moment the option is set, which would kill the view out from
+    # under the switch.
+    if tmux switch-client -t "$VIEW"; then
+        tmux set-option -t "$VIEW" destroy-unattached on
+    else
+        tmux kill-session -t "=$VIEW" 2>/dev/null || true
+        exit 1
+    fi
 else
-    tmux attach -t "ws${NAME:+:$NAME}"
+    # attach blocks until this terminal detaches, so the view is torn down on
+    # the way out — by the trap too, for a terminal that is closed rather than
+    # detached.
+    trap 'tmux kill-session -t "=$VIEW" 2>/dev/null || true' EXIT HUP INT TERM
+    tmux attach -t "$VIEW"
 fi

@@ -125,6 +125,13 @@ permission prompts, or interrupt it directly. `Ctrl-b n`/`Ctrl-b p` cycle betwee
 and `Ctrl-b w` lists them. For a non-interactive peek at what an agent is doing,
 `tmux capture-pane -p -t ws:<name>` prints its screen.
 
+Each terminal watches independently. Two clients of one tmux session share that session's current
+window, so terminal 2 switching to `taa-improvements` would yank terminal 1 off `vat` too; instead
+every attach gets its own throwaway session grouped with `ws` (they show up in `tmux ls` as
+`ws-view-<pid>` while attached). Grouped sessions share the windows — `ws feature`'s new windows
+appear in all of them, `ws done`'s vanish from all of them — but each keeps its own selection. The
+view dies with the terminal that asked for it; the agents belong to `ws` and outlive it.
+
 **Leaving: detach, don't exit.** `Ctrl-b d` detaches — your terminal comes back and the agent
 keeps running; reattach any time. Closing your terminal window amounts to the same thing. But
 `Ctrl-d` / typing `exit` go to the Claude session *inside* the window and end the agent (recover

@@ -50,7 +50,8 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   left empty so the diff base stays `origin/master`, and a fresh worktree is fast-forwarded to
   `origin/<b>` so you never debug a stale local ref.
 - `ws attach [<name>]` — attach to the `ws` tmux session to watch the agents (optionally one
-  feature's window); detach with `Ctrl-b d`.
+  feature's window); detach with `Ctrl-b d`. Each terminal gets its own view session grouped with
+  `ws` (`ws-view-<pid>`), so switching windows in one terminal does not move the others.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete the branch ws created for it
   (a borrowed branch is left alone). Refuses a dirty worktree or an unmerged branch rather than
   forcing.
