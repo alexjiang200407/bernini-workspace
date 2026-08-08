@@ -37,7 +37,8 @@ git-ignored instead.
   PLAN.md                # this file
   CLAUDE.md              # the map every nested session inherits (parent-CLAUDE.md loading)
   .gitignore             # bernini/, bernini.features/, bernini-test-project/
-  ws/                    # the scripts below
+  ws                     # dispatcher: `ws <command>` routes to scripts/
+  scripts/               # the scripts below
   bernini/               # main clone — stays on master, never parked on a feature
   bernini-test-project/  # clone of the test project, used against bernini builds
   bernini.features/      # one worktree per feature, created on demand
@@ -90,7 +91,7 @@ checkout, its open PRs.
       Remote: `git@github.com:alexjiang200407/bernini-workspace.git`.
 - [ ] W3 `bernini/` finished initializing: on master, `just init`, LFS agent configured.
       Gate: `just build` and an LFS smudge succeed there.
-- [ ] W4 `ws feature` / `ws done` / `ws list`. Gate: `ws feature scratch` creates worktree +
+- [x] W4 `ws feature` / `ws done` / `ws list`. Gate: `ws feature scratch` creates worktree +
       tmux window with a live session; `ws done scratch` leaves `git worktree list` clean.
 - [ ] W5 follow-up bernini PR: slim bcp-feature § 1/§ 5 to checkout-agnostic wording.
       Gate: skill text names no workspace paths; a plain-clone run still works.
