@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ws/feature <name> ["<prompt>"] — worktree + agent for a feature.
+# ws feature <name> ["<prompt>"] — worktree + agent for a feature.
 #
 # Creates bernini.features/<name> on feat/<name> (branched from origin/master,
 # or resumed if the branch already exists), seeds it with the machine
@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NAME="${1:?usage: ws/feature <name> [\"<prompt>\"]}"
+NAME="${1:?usage: ws feature <name> [\"<prompt>\"]}"
 PROMPT="${2-}"
 BRANCH="feat/$NAME"
 WT="$ROOT/bernini.features/$NAME"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ws/list — every live feature: its checkout, its branch, its open PRs.
+# ws list — every live feature: its checkout, its branch, its open PRs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

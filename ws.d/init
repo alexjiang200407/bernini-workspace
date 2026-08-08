@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ws/init — once per machine: clone the repos, then initialize bernini.
+# ws init — once per machine: clone the repos, then initialize bernini.
 #
 # Clones bernini and bernini-test-project into the workspace root (skipping any
 # that already exist), then runs `just init` in bernini/ — which generates the
