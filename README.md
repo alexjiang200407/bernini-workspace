@@ -118,9 +118,13 @@ So an agent that exited, crashed, or was lost to a reboot has destroyed nothing.
   claude conversation, full context restored (each worktree is its own claude project, so
   `--continue` finds the right history). Add a prompt to say what to do next:
   `ws feature vat --continue "picking up after reboot — check watch-pr state"`.
-- **`ws feature <name>`** (plain) — same worktree, but a *fresh* conversation started on the
-  bcp-feature prompt. The skill re-derives where it was from the tracker and the PR state; use
-  this when the old conversation isn't worth carrying (it was compacted, confused, or ancient).
+- **`ws feature <name>`** (plain) on an existing worktree **asks at the terminal**: resume the
+  previous conversation? (default yes) — and if resuming, compact it first? (default no —
+  compacting frees context but replaces the transcript with a summary; when compacting, any
+  prompt argument is deferred to `ws attach`, since `/compact` takes the first input). Answering
+  no to resume starts a *fresh* conversation on the bcp-feature prompt — the skill re-derives
+  where it was from the tracker and the PR state; right when the old conversation isn't worth
+  carrying. Non-interactive runs skip the questions and start fresh.
 
 The one thing with no second copy is the worktree itself: the tracker and uncommitted edits die
 with it. That is `ws done`'s refusal semantics — it will not remove a dirty worktree or delete an

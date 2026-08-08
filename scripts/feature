@@ -38,8 +38,10 @@ WT="$ROOT/bernini.features/$NAME"
 
 git -C "$ROOT/bernini" fetch origin
 
+EXISTED=""
 if [ -d "$WT" ]; then
     echo "worktree $WT already exists — resuming"
+    EXISTED=1
 elif git -C "$ROOT/bernini" show-ref --verify --quiet "refs/heads/$BRANCH" ||
      git -C "$ROOT/bernini" show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
     # Resume: the branch exists (locally, or on origin — worktree add DWIMs a
@@ -78,13 +80,38 @@ if [ "${WS_NO_AGENT-}" = "1" ]; then
     exit 0
 fi
 
+# An existing worktree usually means an interrupted feature whose previous
+# conversation is worth keeping. Unless the caller already decided with
+# --continue, ask — but only at a terminal; scripted runs keep the old
+# start-fresh behavior.
+COMPACT=""
+if [ -n "$EXISTED" ] && [ -z "$CONTINUE" ] && [ -t 0 ]; then
+    printf 'resume the previous agent conversation? [Y/n] '
+    read -r ans
+    case "$ans" in
+        n* | N*) ;;
+        *) CONTINUE=1 ;;
+    esac
+    if [ -n "$CONTINUE" ]; then
+        printf 'compact it first (frees context, keeps a summary)? [y/N] '
+        read -r ans
+        case "$ans" in
+            y* | Y*) COMPACT=1 ;;
+        esac
+    fi
+fi
+
 # Interactive tmux, not `claude -p`: bcp-feature's backgrounded watch-pr needs a
 # live session to wake. Every agent window lives in the `ws` session, so
 # ws attach always finds them. --continue resumes the worktree's previous
 # conversation (each worktree is its own claude project) instead of starting
 # the bcp-feature prompt fresh.
 CMD="claude --permission-mode $(printf '%q' "$MODE")"
-if [ -n "$CONTINUE" ]; then
+if [ -n "$COMPACT" ]; then
+    # /compact runs as the first input; a prompt can't be queued behind it.
+    [ -n "$PROMPT" ] && echo "note: compacting first — give the prompt via ws attach $NAME once it finishes"
+    CMD="$CMD --continue '/compact'"
+elif [ -n "$CONTINUE" ]; then
     CMD="$CMD --continue${PROMPT:+ $(printf '%q' "$PROMPT")}"
 else
     CMD="$CMD $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
