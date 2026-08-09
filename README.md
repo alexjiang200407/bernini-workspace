@@ -189,16 +189,27 @@ and `Ctrl-b w` lists them. For a non-interactive peek at what an agent is doing,
 
 Each terminal watches independently. Two clients of one tmux session share that session's current
 window, so terminal 2 switching to `taa-improvements` would yank terminal 1 off `vat` too; instead
-every attach gets its own throwaway session grouped with `ws` (they show up in `tmux ls` as
-`ws-view-<pid>` while attached). Grouped sessions share the windows — `ws feature`'s new windows
-appear in all of them, `ws done`'s vanish from all of them — but each keeps its own selection. The
-view dies with the terminal that asked for it; the agents belong to `ws` and outlive it.
+every attach gets its own throwaway session (they show up in `tmux ls` as `ws-view-<pid>` while
+attached). The view dies with the terminal that asked for it; the agents belong to `ws` and outlive
+it.
+
+What the view holds depends on how you asked for it, and that decides where your terminal goes when
+an agent's window closes:
+
+| | the view | when a window closes |
+|---|---|---|
+| `ws attach` | a session *grouped* with `ws`: the same window list — `ws feature`'s new windows appear, `ws done`'s vanish — with its own selection | you asked for all of them, so tmux moves you to another window |
+| `ws attach <name>` | that one window, linked in from `ws` | nothing is left in the session, so tmux drops you back to your shell |
+
+The one-window view is the point of naming a feature. Grouped, an agent you exited would close its
+window and slide your terminal onto whichever window came next — you would be typing into a
+different feature's live agent with no sign that anything changed.
 
 **Leaving: detach, don't exit.** `Ctrl-b d` detaches — your terminal comes back and the agent
 keeps running; reattach any time. Closing your terminal window amounts to the same thing. But
-`Ctrl-d` / typing `exit` go to the Claude session *inside* the window and end the agent (recover
-with `ws feature <name> --continue` — see below). Ending an agent is `ws done`'s job, not the
-keyboard's.
+`Ctrl-d` / typing `exit` go to the Claude session *inside* the window and end the agent; your
+terminal comes back to its shell, and that agent is gone (recover with `ws feature <name>
+--continue` — see below). Ending an agent is `ws done`'s job, not the keyboard's.
 
 ### `ws cmd <name> [--] <command> [args...]`
 

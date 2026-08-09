@@ -64,8 +64,10 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   left empty so the diff base stays `origin/master`, and a fresh worktree is fast-forwarded to
   `origin/<b>` so you never debug a stale local ref.
 - `ws attach [<name>]` — attach to the `ws` tmux session to watch the agents (optionally one
-  feature's window); detach with `Ctrl-b d`. Each terminal gets its own view session grouped with
-  `ws` (`ws-view-<pid>`), so switching windows in one terminal does not move the others.
+  feature's window); detach with `Ctrl-b d`. Each terminal gets its own view session
+  (`ws-view-<pid>`), so switching windows in one terminal does not move the others: `ws attach` is
+  grouped with `ws` and shows every window, `ws attach <name>` holds that one window alone, so
+  exiting the agent returns the terminal to its shell instead of sliding it onto another agent.
 - `ws cmd <name> [--] <command> [args...]` — run a command in a feature's checkout
   (`ws cmd vat -- just run editor`), or in the main clone with `bernini`. Foreground, in your
   terminal, exiting with the command's status; the cwd is that checkout, so relative paths resolve

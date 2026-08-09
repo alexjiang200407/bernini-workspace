@@ -1,17 +1,33 @@
 #!/usr/bin/env bash
 # ws attach [<name>] — watch the agents: attach to the tmux session (or one feature's window).
 #
-# Detach again with Ctrl-b d. Inside tmux: Ctrl-b n/p cycles windows (one per
-# feature), Ctrl-b w lists them.
+# Detach again with Ctrl-b d. With no <name> the view has every feature's
+# window: Ctrl-b n/p cycles them, Ctrl-b w lists them.
 #
-# Each terminal gets its own *view* session grouped with `ws` rather than
-# attaching to `ws` itself. Two clients of one session share that session's
-# current window, so a second terminal jumping to another feature drags the
-# first one along with it. A grouped session shares the window list (windows
-# ws feature adds appear in it, windows ws done kills disappear from it) but
-# keeps its own selection, so each terminal stays on the agent it asked for.
+# Each terminal gets its own *view* session rather than attaching to `ws`
+# itself. Two clients of one session share that session's current window, so a
+# second terminal jumping to another feature drags the first one along with it.
 # The view is scaffolding: it is killed when its terminal is done with it, and
 # the windows outlive it because they belong to `ws`.
+#
+# The two views differ in what they hold, and that is what decides where the
+# terminal lands when an agent's window goes away:
+#
+#   ws attach          a session *grouped* with `ws`: the same window list (new
+#                      ws feature windows appear, ws done windows vanish) with
+#                      its own selection. You asked to watch all the agents, so
+#                      when one window closes tmux moves you to another.
+#   ws attach <name>   a session holding exactly that one window, linked in
+#                      from `ws`. Grouping here is worse than useless: exiting
+#                      the agent (Ctrl-d in claude) closes the window, and tmux
+#                      slides the terminal onto whichever window is next — you
+#                      are suddenly typing into a different feature's live
+#                      agent with no sign it changed. With only that window in
+#                      the session, closing it empties the session, tmux
+#                      destroys it and the terminal drops back to your shell.
+#
+# The window is a link, not a copy: it is the same window `ws` holds, so the
+# view can be killed (detach, teardown) without touching the agent.
 set -euo pipefail
 
 NAME="${1-}"
@@ -46,9 +62,19 @@ while tmux has-session -t "=$VIEW" 2>/dev/null; do
     N=$((N + 1))
     VIEW="ws-view-$$-$N"
 done
-tmux new-session -d -t ws -s "$VIEW"
 if [ -n "$NAME" ]; then
-    tmux select-window -t "$VIEW:$NAME"
+    # tmux has no "session from an existing window", so the session is born
+    # with a throwaway window, the agent's is linked in beside it, and the
+    # throwaway goes — leaving the one window that is the whole point.
+    PLACEHOLDER="$(tmux new-session -d -P -F '#{window_id}' -s "$VIEW")"
+    if ! tmux link-window -s "ws:$NAME" -t "$VIEW:"; then
+        tmux kill-session -t "=$VIEW" 2>/dev/null || true
+        echo "could not put ws:$NAME in a view of its own" >&2
+        exit 1
+    fi
+    tmux kill-window -t "$PLACEHOLDER"
+else
+    tmux new-session -d -t ws -s "$VIEW"
 fi
 
 if [ -n "${TMUX-}" ]; then
@@ -56,6 +82,12 @@ if [ -n "${TMUX-}" ]; then
     # goes on only *after* the client is there — tmux reaps an unattached
     # session the moment the option is set, which would kill the view out from
     # under the switch.
+    #
+    # detach-on-destroy stays at its default `on`, so an agent that exits drops
+    # this terminal out of tmux altogether rather than back into the session it
+    # came from. `off` reads like the kinder answer and is the bug again: it
+    # sends the client to the most recently active remaining session, which on
+    # a workspace with other terminals watching agents is another agent's view.
     if tmux switch-client -t "$VIEW"; then
         tmux set-option -t "$VIEW" destroy-unattached on
     else
