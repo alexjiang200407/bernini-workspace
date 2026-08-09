@@ -25,8 +25,13 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
 ## Scripts (invoked as `./ws <command>` from the workspace root)
 
 - `ws init` — once per machine: clone `bernini` and `bernini-test-project`, then run `just init` in
-  `bernini/` (machine `config.json`, git hooks, LFS transfer agent — see `bernini/docs/lfs.md`).
-  Idempotent: existing clones and an existing `config.json` are skipped.
+  `bernini/` (machine `config.json`, git hooks, LFS transfer agent — see `bernini/docs/lfs.md`),
+  and point every checkout's editor at the test project. Idempotent: existing clones and an
+  existing `config.json` are skipped, so re-running it is also how older checkouts are backfilled.
+  The editor's `apps/editor/config.json` is git-ignored and per-checkout, and its `startupProject`
+  is filled in with `bernini-test-project/Test Project.berniniproject` so `just run editor` opens
+  the test project rather than the empty state — an existing one is patched, never replaced, and a
+  `startupProject` that resolves is left alone.
 - `ws doctor` — health check: platform, tools, clones, init state, LFS smudge, worktree seeding.
   Exits non-zero on FAILs.
 - `ws completions [<zsh|bash>] [--install]` — print the shell completion script; `--install` writes
@@ -36,7 +41,8 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   completes without a completion file being touched. Scripts named `_*` are plumbing: routable,
   hidden from usage.
 - `ws feature <name> ["<prompt>"] [--cycle|--one-shot] [--branch <b>] [--preset <p>] [--model <m>]` — worktree at `bernini.features/<name>` on
-  `feat/<name>` (resumes if the branch exists), seeded with `config.json` and worktree-scoped
+  `feat/<name>` (resumes if the branch exists), seeded with `config.json`, the editor's startup
+  project (see `ws init`) and worktree-scoped
   `bernini.feature` config, then a tmux window running the agent on one of two workflows:
   `--cycle` (default) runs `bcp-feature <name> <prompt>` — plan PR, then one task PR at a time into
   `feat/<name>`; `--one-shot` runs `bcp-implement <prompt>` — the whole change as a single PR to

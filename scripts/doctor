@@ -91,6 +91,19 @@ if [ -d "$ROOT/bernini/.git" ]; then
     done
 fi
 
+# The editor's startup project. apps/editor/config.json is per-checkout and
+# git-ignored, so it is seeding like scripts/config.json is: a checkout made
+# before ws seeded it — or one whose config came from another machine — opens
+# the editor on the empty state instead of the test project.
+if [ -d "$ROOT/bernini/.git" ]; then
+    unseeded="$("$ROOT/scripts/_editor-config" --check 2>/dev/null | tr '\n' ' ')"
+    if [ -n "${unseeded// /}" ]; then
+        warn "editor opens no project in: ${unseeded% } — run: ws init"
+    else
+        ok "editor startup project set in every checkout"
+    fi
+fi
+
 # The bare `ws` spelling.
 target="$(command -v ws 2>/dev/null || true)"
 if [ -z "$target" ]; then

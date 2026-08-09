@@ -16,6 +16,7 @@ a checkout sits.
 | bcp-feature mechanics (plan PR, task loop, precheck, watch) | ✅ | — |
 | worktree-safe `watchlist.py`, worktree-scoped `bernini.feature` | ✅ | — |
 | worktree creation/removal, `config.json` seeding | — | `ws feature` / `ws done` |
+| where a project to open lives (the editor's `startupProject`) | — | `ws init` / `ws feature` |
 | agent spawning (tmux + `claude` launch) | — | `ws feature` |
 | layout map (`CLAUDE.md`, inherited by nested sessions) | — | ✅ |
 | cross-feature status (worktrees × PR states) | — | `ws list` |

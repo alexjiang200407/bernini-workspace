@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+# ws _editor-config [--check] [<checkout>...] — point a checkout's editor at the test project.
+#
+# apps/editor/config.json is the editor's own settings file: git-ignored, one
+# per checkout, and cmake deploys it next to the editor binary. Its
+# `startupProject` names the project the editor opens on launch, and it ships
+# empty (config.example.json) because the repo has no idea where a project
+# lives. The workspace does -- bernini-test-project/ is right here -- so ws
+# fills it in rather than leaving every new worktree at the empty state,
+# waiting for someone to browse to the same project again.
+#
+# The file belongs to the editor, not to ws: an existing one is patched in
+# place, never replaced, and only when its startupProject is empty or names a
+# path that is gone (a config carried over from another machine). A path that
+# resolves is somebody's choice and is left alone.
+#
+# <checkout> is a path or a feature name (`vat`, `bernini`), as ws cmd takes
+# them. With none, every checkout -- which is how to backfill worktrees made
+# before this existed (`ws init` does exactly that).
+#
+# --check writes nothing and names the checkouts that would be seeded, so ws
+# doctor can report the state without holding a second opinion about what
+# "seeded" means. It exits non-zero when it names any.
+import glob
+import json
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEST_PROJECT = os.path.join(ROOT, "bernini-test-project")
+
+
+def checkout_dir(name):
+    """A path stays a path; a bare name maps as it does for ws cmd."""
+    if os.sep in name or name in (".", ".."):
+        return os.path.abspath(name)
+    if name in ("bernini", "master"):
+        return os.path.join(ROOT, "bernini")
+    return os.path.join(ROOT, "bernini.features", name)
+
+
+def every_checkout():
+    found = [os.path.join(ROOT, "bernini")]
+    found += sorted(glob.glob(os.path.join(ROOT, "bernini.features", "*")))
+    return [d for d in found if os.path.isdir(d)]
+
+
+def startup_project():
+    """The one .berniniproject at the top of the test project clone.
+
+    Zero or several is not something ws can decide, and a wrong path is worse
+    than none: a startupProject the editor cannot open costs a modal warning
+    on every launch.
+    """
+    found = sorted(glob.glob(os.path.join(TEST_PROJECT, "*.berniniproject")))
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        raise SystemExit(f"ws _editor-config: no .berniniproject in {TEST_PROJECT} -- run ws init")
+    raise SystemExit(
+        f"ws _editor-config: {len(found)} .berniniproject files in {TEST_PROJECT}"
+        " -- ws cannot pick the startup project"
+    )
+
+
+def opens_a_project(config):
+    """Whether this config already names a project that is really there."""
+    try:
+        with open(config, encoding="utf-8") as f:
+            named = json.load(f).get("startupProject") or ""
+    except (OSError, ValueError):
+        return False
+    return bool(named) and os.path.exists(os.path.expanduser(named))
+
+
+def seed(directory, project):
+    """Give this checkout a config.json opening `project`. Returns what it did."""
+    example = os.path.join(directory, "apps", "editor", "config.example.json")
+    config = os.path.join(directory, "apps", "editor", "config.json")
+    if not os.path.isfile(example):
+        raise FileNotFoundError(example)
+
+    if opens_a_project(config):
+        return "kept"
+
+    created = not os.path.exists(config)
+    source = example if created else config
+    try:
+        with open(source, encoding="utf-8") as f:
+            settings = json.load(f)
+    except ValueError:
+        # A config.json too broken to read is not one worth preserving; the
+        # example is what a fresh checkout would have had anyway.
+        with open(example, encoding="utf-8") as f:
+            settings = json.load(f)
+
+    settings["startupProject"] = project
+    with open(config, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=4)
+        f.write("\n")
+    return "created" if created else "repointed"
+
+
+def main(argv):
+    check = False
+    if argv and argv[0] == "--check":
+        check = True
+        argv = argv[1:]
+
+    targets = [checkout_dir(a) for a in argv] if argv else every_checkout()
+    # --check never writes, so it does not need to have found the project.
+    project = "" if check else startup_project()
+
+    status = 0
+    for directory in targets:
+        example = os.path.join(directory, "apps", "editor", "config.example.json")
+        if not os.path.isfile(example):
+            # A checkout old enough to predate the editor config is not one
+            # that is missing it.
+            if not check:
+                print(
+                    f"ws _editor-config: no apps/editor/config.example.json in {directory}",
+                    file=sys.stderr,
+                )
+                status = 1
+            continue
+
+        if check:
+            if not opens_a_project(os.path.join(directory, "apps", "editor", "config.json")):
+                print(os.path.basename(directory))
+                status = 1
+            continue
+
+        try:
+            did = seed(directory, project)
+        except OSError as e:
+            print(f"ws _editor-config: could not seed {directory}: {e}", file=sys.stderr)
+            status = 1
+            continue
+
+        where = os.path.relpath(os.path.join(directory, "apps/editor/config.json"), ROOT)
+        if did == "created":
+            print(f"editor startup project set in {where} -> {os.path.basename(project)}")
+        elif did == "repointed":
+            print(
+                f"editor startup project in {where} was gone"
+                f" -- repointed at {os.path.basename(project)}"
+            )
+
+        # cmake picks config.json-or-config.example.json at *configure* time,
+        # and a file appearing is neither a CMakeLists edit nor a glob change,
+        # so a build dir configured before this keeps deploying the example
+        # until it is told to look again.
+        if did == "created" and glob.glob(os.path.join(directory, "build", "*", "CMakeCache.txt")):
+            print("  this checkout is already configured -- pick it up with: just build --configure")
+
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

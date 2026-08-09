@@ -199,6 +199,11 @@ if [ -f "$ROOT/bernini/scripts/config.json" ]; then
     cp "$ROOT/bernini/scripts/config.json" "$WT/scripts/config.json"
 fi
 
+# The editor's own config, pointed at the workspace's test project so that
+# `just run editor` in here opens something. Best-effort: a checkout with no
+# startup project still builds and still runs, it just starts empty.
+"$ROOT/scripts/_editor-config" "$WT" || true
+
 # A tracker parked in the main clone (a feature migrating in from another
 # checkout) moves into the worktree: the tracker's home is the checkout the
 # feature session runs in, and it dies with the worktree.

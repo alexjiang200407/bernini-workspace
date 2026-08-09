@@ -57,6 +57,11 @@ else
     python3 scripts/init.py
 fi
 
+# Point every checkout's editor at the test project clone. Idempotent and not
+# only for a fresh machine: re-running ws init is how checkouts made before
+# this existed get their apps/editor/config.json.
+"$ROOT/scripts/_editor-config" || true
+
 # Put `ws` on PATH so the commands work bare (`ws feature vat`) from anywhere.
 if ! command -v ws >/dev/null 2>&1 && [ -d "$HOME/.local/bin" ]; then
     ln -s "$ROOT/ws" "$HOME/.local/bin/ws"

@@ -51,17 +51,36 @@ apt on Linux — tmux hosts the feature agent sessions), then runs `just init` i
 generates the machine `config.json`, installs the git hooks, and configures the LFS transfer agent
 (see `bernini/docs/lfs.md`). Like bernini's own scripts, `python3` is assumed to be on PATH.
 
-Re-running `ws init` is safe: clones that exist are skipped, and `just init` is skipped once
-`bernini/scripts/config.json` exists.
+It also points every checkout's editor at the test project — see below. Re-running `ws init` is
+safe: clones that exist are skipped, `just init` is skipped once `bernini/scripts/config.json`
+exists, and the editor configs are only filled in where they are missing. That is the way to
+backfill checkouts made before a workspace change.
+
+#### The editor's startup project
+
+`apps/editor/config.json` is the editor's own settings file — git-ignored, one per checkout,
+deployed next to the binary by cmake — and its `startupProject` names the project the editor opens
+on launch. It ships empty (`config.example.json`) because the repo has no idea where a project
+lives; the workspace does, so `ws init` and `ws feature` fill it in with
+`bernini-test-project/Test Project.berniniproject`. `just run editor` in any checkout then comes up
+on the test project instead of the empty state, with no browsing to the same project once per
+worktree.
+
+The file is the editor's, not ws's. An existing one is patched in place, never replaced, and only
+when its `startupProject` is empty or names a path that is gone (a config carried in from another
+machine) — a path that resolves is somebody's choice and is left alone. One caveat on a checkout
+that was already built: cmake chooses `config.json`-or-`config.example.json` at *configure* time,
+and a file appearing is neither a CMakeLists edit nor a glob change, so the build keeps deploying
+the example until `just build --configure` says otherwise. ws says so when it matters.
 
 ### `ws doctor`
 
 Checks the workspace for problems and exits non-zero on any `FAIL`: platform (Git Bash is
 rejected), required tools (`git`, `python3`, `tmux`, `claude`, `git-lfs`), the clones, whether
 `just init` has been run, whether `bernini/` is parked off master, whether LFS assets smudged or
-are still pointer text, stale worktree registrations, per-worktree seeding, and the `ws` PATH
-symlink. `warn`s are things the workspace survives; `FAIL`s break `ws feature` or the builds
-inside it.
+are still pointer text, stale worktree registrations, per-worktree seeding, whether each checkout's
+editor has a startup project that still exists, and the `ws` PATH symlink. `warn`s are things the
+workspace survives; `FAIL`s break `ws feature` or the builds inside it.
 
 ### `ws completions [<zsh|bash>] [--install]`
 
@@ -102,7 +121,8 @@ Starts (or resumes) a feature:
 1. Fetches origin, then adds a worktree at `bernini.features/<name>` on branch `feat/<name>` —
    branched from `origin/master`, or reused as-is if the branch already exists locally or on
    origin (resume). `--branch <b>` borrows an existing branch instead (see below).
-2. Seeds the worktree: copies the machine `scripts/config.json` in, sets the worktree-scoped
+2. Seeds the worktree: copies the machine `scripts/config.json` in, points the editor's
+   `apps/editor/config.json` at the test project (above), sets the worktree-scoped
    `bernini.feature` git config, and moves in any tracker parked at
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
 3. Opens a tmux window (always in the `ws` session, one window per feature) running
