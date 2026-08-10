@@ -30,8 +30,9 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   existing `config.json` are skipped, so re-running it is also how older checkouts are backfilled.
   The editor's `apps/editor/config.json` is git-ignored and per-checkout, and its `startupProject`
   is filled in with `bernini-test-project/Test Project.berniniproject` so `just run editor` opens
-  the test project rather than the empty state — an existing one is patched, never replaced, and a
-  `startupProject` that resolves is left alone.
+  the test project rather than the empty state, and its `instanceName` with the checkout's own name
+  (`master` for the main clone) so two editors run side by side say which checkout each was built
+  in — an existing one is patched, never replaced, and a value that stands is left alone.
 - `ws doctor` — health check: platform, tools, clones, init state, LFS smudge, worktree seeding.
   Exits non-zero on FAILs.
 - `ws completions [<zsh|bash>] [--install]` — print the shell completion script; `--install` writes

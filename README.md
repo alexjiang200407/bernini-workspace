@@ -56,22 +56,30 @@ safe: clones that exist are skipped, `just init` is skipped once `bernini/script
 exists, and the editor configs are only filled in where they are missing. That is the way to
 backfill checkouts made before a workspace change.
 
-#### The editor's startup project
+#### The editor's startup project, and which checkout its window came from
 
 `apps/editor/config.json` is the editor's own settings file — git-ignored, one per checkout,
-deployed next to the binary by cmake — and its `startupProject` names the project the editor opens
-on launch. It ships empty (`config.example.json`) because the repo has no idea where a project
-lives; the workspace does, so `ws init` and `ws feature` fill it in with
-`bernini-test-project/Test Project.berniniproject`. `just run editor` in any checkout then comes up
-on the test project instead of the empty state, with no browsing to the same project once per
-worktree.
+deployed next to the binary by cmake. Two of its keys are the workspace's business, and `ws init`
+and `ws feature` fill both in:
 
-The file is the editor's, not ws's. An existing one is patched in place, never replaced, and only
-when its `startupProject` is empty or names a path that is gone (a config carried in from another
-machine) — a path that resolves is somebody's choice and is left alone. One caveat on a checkout
-that was already built: cmake chooses `config.json`-or-`config.example.json` at *configure* time,
-and a file appearing is neither a CMakeLists edit nor a glob change, so the build keeps deploying
-the example until `just build --configure` says otherwise. ws says so when it matters.
+- `startupProject` names the project the editor opens on launch. It ships empty
+  (`config.example.json`) because the repo has no idea where a project lives; the workspace does,
+  so it is set to `bernini-test-project/Test Project.berniniproject`. `just run editor` in any
+  checkout then comes up on the test project instead of the empty state, with no browsing to the
+  same project once per worktree.
+- `instanceName` leads the editor's window title. Running two checkouts side by side is what a
+  worktree per feature is *for*, and their windows are otherwise identical — same title, same
+  project. It is set to the checkout's own name (`master` for the main clone), so the windows read
+  `vat — Bernini Editor — Test Project` and `master — Bernini Editor — Test Project`.
+
+The file is the editor's, not ws's. An existing one is patched in place, never replaced, and each
+key only when it holds nothing usable — a `startupProject` that is empty or names a path that is
+gone (a config carried in from another machine), an empty `instanceName`. A value that stands is
+somebody's choice and is left alone. One caveat on a checkout that was already built: cmake chooses
+`config.json`-or-`config.example.json` at *configure* time and copies it next to the binary after
+linking the editor, neither of which a file that changed underneath them triggers — so the build
+keeps deploying what it was built with until `just build --configure` says otherwise. ws says so
+when it matters.
 
 ### `ws doctor`
 
@@ -122,7 +130,8 @@ Starts (or resumes) a feature:
    branched from `origin/master`, or reused as-is if the branch already exists locally or on
    origin (resume). `--branch <b>` borrows an existing branch instead (see below).
 2. Seeds the worktree: copies the machine `scripts/config.json` in, points the editor's
-   `apps/editor/config.json` at the test project (above), sets the worktree-scoped
+   `apps/editor/config.json` at the test project and names its window after the feature
+   (above), sets the worktree-scoped
    `bernini.feature` git config, and moves in any tracker parked at
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
 3. Opens a tmux window (always in the `ws` session, one window per feature) running
