@@ -51,7 +51,8 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   asked which; the answer is recorded as `bernini.wsWorkflow` so resuming neither asks again nor
   re-seeds the wrong base. A new feature must come with a prompt — a terminal run asks for one, a
   non-interactive run refuses before creating anything; `--continue`, a borrowed checkout, and
-  `--cycle` on an existing feature are the exceptions.
+  `--cycle` on an existing feature are the exceptions. An existing worktree is asked whether to
+  resume its previous conversation *first*, and resuming means no prompt is wanted at all.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
   is per-checkout; the preset in it is a choice, not machine state). A fresh session at a
   terminal is asked which model to run on (`--model <m>` answers it up front; non-interactive

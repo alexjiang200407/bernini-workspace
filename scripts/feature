@@ -153,10 +153,38 @@ if [ -z "$WORKFLOW" ]; then
     fi
 fi
 
+# An existing worktree usually means an interrupted feature whose previous
+# conversation is worth keeping. Unless the caller already decided with
+# --continue, ask — but only at a terminal; scripted runs keep the old
+# start-fresh behavior.
+#
+# Asked before the prompt below, because the answer decides whether there is
+# anything to ask: a resumed conversation already carries the intent. The other
+# order demands a prompt for a feature that is mid-flight and only then offers
+# to resume it — which reads as ws having forgotten what the worktree is.
+COMPACT=""
+if [ -n "$EXISTED" ] && [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ -t 0 ]; then
+    printf 'resume the previous agent conversation? [Y/n] '
+    read -r ans
+    case "$ans" in
+        n* | N*) ;;
+        *) CONTINUE=1 ;;
+    esac
+    if [ -n "$CONTINUE" ]; then
+        printf 'compact it first (frees context, keeps a summary)? [y/N] '
+        read -r ans
+        case "$ans" in
+            y* | Y*) COMPACT=1 ;;
+        esac
+    fi
+fi
+
 # A fresh session with no prompt is an agent with nothing to do — the empty
 # `bcp-feature <name>` that started this. Resuming is the exception (the
 # conversation carries the intent), and so is pointing cycle at a feature that
-# already exists: bcp-feature picks it up and reports where it stands.
+# already exists: bcp-feature picks it up and reports where it stands. A
+# one-shot has no such state — bcp-implement is one change described once — so
+# starting a fresh session on one still has to say what the change is.
 if [ -z "$PROMPT" ] && [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ "$WORKFLOW" != none ] &&
     ! { [ "$WORKFLOW" = cycle ] && [ -n "$EXISTING_FEATURE" ]; }; then
     if [ -t 0 ]; then
@@ -164,7 +192,12 @@ if [ -z "$PROMPT" ] && [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ "$WORKFLOW"
         read -r PROMPT
     fi
     if [ -z "$PROMPT" ]; then
-        echo "ws feature $NAME: a new $WORKFLOW feature needs a prompt — there is nothing for the agent to do without one" >&2
+        if [ -n "$EXISTED" ]; then
+            echo "ws feature $NAME: a fresh $WORKFLOW session needs a prompt — the worktree is here, but nothing tells the agent what to do in it" >&2
+            echo "  ws feature $NAME --continue        (pick the previous conversation up instead)" >&2
+        else
+            echo "ws feature $NAME: a new $WORKFLOW feature needs a prompt — there is nothing for the agent to do without one" >&2
+        fi
         echo "  ws feature $NAME \"<what to build>\"" >&2
         exit 1
     fi
@@ -250,27 +283,6 @@ if [ -n "$NO_AGENT" ]; then
     echo "worktree ready at $WT on $BRANCH — no agent launched"
     echo "build it there: cd $WT && just build && just run <target>   (ws done $NAME removes it)"
     exit 0
-fi
-
-# An existing worktree usually means an interrupted feature whose previous
-# conversation is worth keeping. Unless the caller already decided with
-# --continue, ask — but only at a terminal; scripted runs keep the old
-# start-fresh behavior.
-COMPACT=""
-if [ -n "$EXISTED" ] && [ -z "$CONTINUE" ] && [ -t 0 ]; then
-    printf 'resume the previous agent conversation? [Y/n] '
-    read -r ans
-    case "$ans" in
-        n* | N*) ;;
-        *) CONTINUE=1 ;;
-    esac
-    if [ -n "$CONTINUE" ]; then
-        printf 'compact it first (frees context, keeps a summary)? [y/N] '
-        read -r ans
-        case "$ans" in
-            y* | Y*) COMPACT=1 ;;
-        esac
-    fi
 fi
 
 # Only a fresh session picks a model — a resumed conversation keeps the one it

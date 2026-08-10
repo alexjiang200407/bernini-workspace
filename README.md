@@ -163,6 +163,11 @@ worktree, rather than leaving one behind. Two exceptions, both of which carry th
 `--continue` (the conversation has it) and pointing `--cycle` at a feature that already exists —
 `bcp-feature` picks that up and reports where it stands.
 
+An existing worktree is asked about *before* any of that: resume the previous conversation? Say yes
+and the question of a prompt never comes up, because the conversation is the intent. Only a fresh
+session on a `--one-shot` worktree still has to say what the change is — `bcp-implement` is one
+change described once, so unlike `--cycle` there is no feature state for it to pick up.
+
 The seeded `config.json` is a copy of the main clone's — the machine default. The build preset in
 it is a *choice*, not a machine fact (on Windows, one feature may build dx12 while another builds
 vulkan), so `--preset <p>` re-inits the worktree's own copy with that preset: `init.py` re-derives
