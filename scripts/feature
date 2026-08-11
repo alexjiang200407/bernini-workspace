@@ -323,6 +323,10 @@ else
     # want.
     CMD="$CMD${PROMPT:+ $(printf '%q' "$PROMPT")}"
 fi
+# Under _agent, which takes the agent's backgrounded work (bcp-feature's
+# `just watch-pr`) down with the session. claude starts those detached, so
+# closing the window leaves them polling a PR nobody is reading — see _agent.
+CMD="$(printf '%q' "$ROOT/scripts/_agent") $CMD"
 if tmux has-session -t ws 2>/dev/null; then
     tmux new-window -t ws: -c "$WT" -n "$NAME" "$CMD"
 else

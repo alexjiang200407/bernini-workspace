@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# ws _agent <command> [args...] — run a feature's agent, and take the work it
+# backgrounded down with it.
+#
+# bcp-feature leaves a `just watch-pr <n>` running in the background for hours
+# at a time, and claude starts such a shell *detached*: its own process group,
+# no controlling terminal. Nothing that ends the session reaches it. Closing
+# the window (`ws done`), killing the agent, losing the terminal — the pane
+# dies, the watcher does not, and it goes on polling a PR nobody is reading,
+# waking its dead session's notifications every hour until someone hunts the
+# pid down. An agent that exited by itself does clean up after itself; every
+# other way out leaks.
+#
+# The one handle on a detached shell is that it is a child of claude — and only
+# while claude is alive: the moment it exits, its children reparent to launchd
+# and are indistinguishable from every other process on the machine. There is
+# no after-the-fact fix, so a watchdog samples the tree *while* the agent runs
+# and kills whatever is left of it once the agent is gone.
+#
+# The watchdog runs *beside* the agent, not around it: this script forks it and
+# then `exec`s the agent, so the pane's process is claude itself, exactly as
+# before — same pid, same process group, same terminal, same signals. A wrapper
+# that stayed in the middle would have to imitate all of that, and would get it
+# wrong: a background child of a non-interactive shell has SIGINT ignored and
+# stdin on /dev/null, so Ctrl-C would stop reaching the agent.
+#
+# Sampling is a poll (WS_AGENT_SAMPLE_SECONDS, default 5s) because a watcher
+# armed for an hour is caught by any interval at all. What a poll cannot see is
+# work backgrounded in the last few seconds before the agent goes — which is
+# not the shape of the problem. Each remembered process is stored with its
+# command line and killed only if it still matches, so a pid the kernel reused
+# in the meantime is left alone.
+#
+# WS_AGENT_LOG names a file to write what it did to; by default nothing is
+# written anywhere, and nothing may be written to the *pane*: holding the
+# terminal open would keep the window alive after the agent had exited.
+set -uo pipefail
+
+[ $# -gt 0 ] || { echo "usage: ws _agent <command> [args...]" >&2; exit 2; }
+
+INTERVAL="${WS_AGENT_SAMPLE_SECONDS:-5}"
+SEEN="$(mktemp -t ws-agent)"
+# This shell *is* the agent from the exec below onwards — same pid.
+AGENT=$$
+# The watchdog's own pid, so it leaves itself out of the tree it is sampling.
+SKIP=""
+
+# When a pid was started, which survives exec and so identifies the process
+# across it. A pid alone does not: the kernel reuses them, and a watchdog that
+# lost its agent must not adopt whatever inherited the number.
+started_at() { ps -o lstart= -p "$1" 2>/dev/null; }
+
+# Every pid under $1, children before parents, so a kill list built from it
+# takes the leaves before the branch they hang on. The watchdog's own subtree
+# is not part of the agent's work.
+descendants() {
+    local kid
+    for kid in $(pgrep -P "$1" 2>/dev/null); do
+        [ "$kid" = "$SKIP" ] && continue
+        descendants "$kid"
+        printf '%s\n' "$kid"
+    done
+}
+
+# What the agent's tree looks like right now, plus what it looked like before
+# and still does: an intermediate shell that exits orphans its own children
+# onto launchd, and those are precisely the ones worth remembering.
+sample() {
+    local pid cmd
+    : > "$SEEN.new"
+    while read -r pid; do
+        cmd="$(ps -o command= -p "$pid" 2>/dev/null)" || continue
+        [ -n "$cmd" ] && printf '%s\t%s\n' "$pid" "$cmd" >> "$SEEN.new"
+    done < <(descendants "$AGENT")
+    while IFS=$'\t' read -r pid cmd; do
+        [ -n "${pid:-}" ] || continue
+        grep -qxF "$pid	$cmd" "$SEEN.new" && continue
+        [ "$(ps -o command= -p "$pid" 2>/dev/null)" = "$cmd" ] &&
+            printf '%s\t%s\n' "$pid" "$cmd" >> "$SEEN.new"
+    done < "$SEEN"
+    mv "$SEEN.new" "$SEEN"
+}
+
+# The agent is gone; so should everything it started be.
+# A list of pids, not an array: bash 3.2 has no way to expand an empty array
+# under `set -u`, and pids need no quoting.
+reap() {
+    local pid cmd kid targets=""
+    while IFS=$'\t' read -r pid cmd; do
+        [ -n "${pid:-}" ] || continue
+        # A pid whose command no longer matches is not the process we watched.
+        [ "$(ps -o command= -p "$pid" 2>/dev/null)" = "$cmd" ] || continue
+        # Whatever it has spawned since the last sample goes with it.
+        while read -r kid; do
+            [ -n "$kid" ] && targets="$targets $kid"
+        done < <(descendants "$pid")
+        targets="$targets $pid"
+    done < "$SEEN"
+    [ -n "${targets// /}" ] || return 0
+    # A pid can be both remembered and found again under another; say it once.
+    targets="$(printf '%s\n' $targets | awk '!seen[$0]++' | tr '\n' ' ')"
+
+    echo "ws _agent: taking down the process(es) the agent left behind: $targets"
+    kill $targets 2>/dev/null || true
+    sleep 2
+    kill -9 $targets 2>/dev/null || true
+}
+
+watchdog() {
+    # Its own pid, the roundabout way: macOS ships bash 3.2, which has no
+    # BASHPID, and $$ in a subshell is still the parent's.
+    SKIP="$(exec sh -c 'echo $PPID')"
+    # The pane closing hangs up this process group on its way out — which is
+    # the moment there is work to do, so it is not a moment to die in.
+    trap '' HUP INT TERM QUIT
+    local started
+    started="$(started_at "$AGENT")"
+    while [ -n "$started" ] && [ "$(started_at "$AGENT")" = "$started" ]; do
+        sample
+        sleep "$INTERVAL"
+    done
+    reap
+    rm -f "$SEEN" "$SEEN.new"
+}
+
+# No terminal, so the pane's life is the agent's alone; no stdin, so it cannot
+# steal a keystroke from it.
+watchdog </dev/null >>"${WS_AGENT_LOG:-/dev/null}" 2>&1 &
+
+# The agent takes this process over: from here on there is no wrapper, only
+# claude with a watchdog beside it.
+exec "$@"

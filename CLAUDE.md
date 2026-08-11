@@ -65,7 +65,12 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   fresh. A terminal run auto-attaches to the new agent's window (`Ctrl-b d` to step out);
   non-interactive runs return immediately. If the feature's agent is already running, a terminal
   run attaches to it instead of starting a second one. `--no-agent` (or `WS_NO_AGENT=1`) creates the
-  worktree without launching an agent — a checkout to build and run the editor in.
+  worktree without launching an agent — a checkout to build and run the editor in. The agent runs
+  under `scripts/_agent`, which forks a watchdog and then execs claude — so the pane is still claude
+  itself and behaves exactly as before, while the watchdog samples its process tree and kills what
+  is left of it when the session ends: claude starts backgrounded work (`just watch-pr`) detached,
+  so a window closed by `ws done` or a killed agent would otherwise leave a watcher polling a PR for
+  hours.
   `--branch <b>` borrows an existing branch (it must already exist) instead of `feat/<name>`: the
   cross-platform debug case, where a fix written on Windows has to be built on the mac. A borrowed
   checkout is not ws's: `ws done` removes the worktree but leaves the branch, `bernini.feature` is

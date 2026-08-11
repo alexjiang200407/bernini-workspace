@@ -135,7 +135,8 @@ Starts (or resumes) a feature:
    `bernini.feature` git config, and moves in any tracker parked at
    `bernini/.claude/features/<name>.md` (a feature migrating from another checkout).
 3. Opens a tmux window (always in the `ws` session, one window per feature) running
-   `claude --permission-mode <m> "<workflow> <prompt>"` in the worktree. The mode defaults
+   `claude --permission-mode <m> "<workflow> <prompt>"` in the worktree — under `ws _agent`, so
+   the agent's background watchers end when it does (below). The mode defaults
    to `bypassPermissions` — feature agents run unattended, so nothing stops at a prompt; bernini's
    own guard hooks (`gh pr` blocking, PR-watch) still apply. Pass `--mode` to gate a specific
    feature instead (e.g. `--mode acceptEdits` lets edits flow but stops Bash at a permission
@@ -185,6 +186,31 @@ touched. The same works by hand at any time: `just init --preset <p> --force` in
 
 `--no-agent` (or `WS_NO_AGENT=1`) stops after step 2 and leaves a prepared worktree with no agent —
 a checkout to build and run the editor in, nothing more.
+
+#### What the agent leaves running
+
+`bcp-feature` backgrounds a `just watch-pr <n>` that polls for hours, and claude starts such a
+shell *detached*: its own process group, no controlling terminal. Nothing that ends the session
+reaches it. An agent that exits by itself does clean up after itself, but every other way out —
+`ws done`, a killed window, a terminal that went away — left the watcher polling a PR nobody was
+reading and waking that dead session's notification hook every hour until someone hunted the pid
+down.
+
+So the agent runs under `scripts/_agent`, which forks a watchdog and then **`exec`s claude**: the
+pane's process is still claude itself, same pid, same process group, same terminal. Ctrl-C, the
+TUI, the exit status and the moment the window closes are all exactly what they were — the wrapper
+is not in the middle of any of it. Beside it, the watchdog samples claude's process tree every 5s
+(`WS_AGENT_SAMPLE_SECONDS`) and, once claude is gone, takes down what is left — `TERM`, then
+`KILL`. Each remembered process is stored with its command line and killed only if it still
+matches, so a pid the kernel has reused since is left alone. It has to be a poll rather than a look
+around at teardown: a detached shell is identifiable only as a child of claude, and the moment
+claude exits its children reparent to launchd and look like every other process on the machine.
+
+What that sweeps up is *everything* the agent backgrounded, not only `watch-pr` — a build or a
+server it left running goes too. Anything started outside the agent (`ws cmd`, your own shell, a
+tmux window the agent opened) is not its child and is untouched. `WS_AGENT_LOG=<file>` records what
+was killed; by default the watchdog writes nowhere and holds no terminal, since a process holding
+the pane's would keep the window alive after the agent had exited.
 
 #### Borrowing a branch: `--branch <b>`
 
@@ -265,7 +291,9 @@ to) — two concurrent builds share one build directory and will trip over each 
 ### `ws done <name>`
 
 Tears the feature down: removes the worktree (the git-ignored tracker and worktree config die with
-it), kills the tmux window, deletes the branch ws created for it. Refuses a dirty worktree or an
+it), kills the tmux window — which takes the agent's backgrounded watchers with it, see [what the
+agent leaves running](#what-the-agent-leaves-running) — and deletes the branch ws created for it.
+Refuses a dirty worktree or an
 unmerged branch rather than forcing — override by hand if that is really what you want. A borrowed
 branch (`ws feature --branch`) is not ws's to delete: the worktree and window go, the branch stays.
 
