@@ -54,6 +54,9 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   non-interactive run refuses before creating anything; `--continue`, a borrowed checkout, and
   `--cycle` on an existing feature are the exceptions. An existing worktree is asked whether to
   resume its previous conversation *first*, and resuming means no prompt is wanted at all.
+  Before any of it, `scripts/_sync-master` fetches and fast-forwards the main clone's master:
+  nothing else in the workspace moves `bernini/`, and a stale master means quick fixes cut from an
+  old tree and a `ws done` that reads a merged feature as unmerged.
   `--preset` re-inits the worktree's own `config.json` with a different build preset (config.json
   is per-checkout; the preset in it is a choice, not machine state). A fresh session at a
   terminal is asked which model to run on (`--model <m>` answers it up front; non-interactive
@@ -87,5 +90,5 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   there and not where you invoked `ws`. One terminal instead of one per worktree.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete the branch ws created for it
   (a borrowed branch is left alone). Refuses a dirty worktree or an unmerged branch rather than
-  forcing.
+  forcing — pulling master first, since "unmerged" is judged against the local one.
 - `ws list` — worktrees alongside open PRs: every live feature, its checkout, its PR state.

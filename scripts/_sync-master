@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# ws _sync-master — fetch origin, and bring the main clone's master with it.
+#
+# Nothing in the workspace ever moves `bernini/`'s master on its own. A feature
+# is cut from `origin/master`, which the fetch has just made current, so the
+# worktrees are fine — the main clone is the one that quietly falls weeks
+# behind, and it is the checkout everything else leans on:
+#   * the quick fix you make in it starts from an old master;
+#   * `ws cmd bernini -- ...` builds yesterday's tree;
+#   * `ws done` deletes a feature branch only once git can see it merged, and
+#     git looks at the *local* master — so a feature merged on GitHub reads as
+#     unmerged here, and ws done refuses it, until master is pulled.
+# So the commands that lean on master pull it first, here, in one place.
+#
+# Fast-forward only, and never over anything: a clone mid-rebase, or with a
+# change in the way, is left exactly as it is with a note. The fetch itself is
+# not best-effort — a caller that cannot reach origin has bigger problems than
+# a stale master, so it fails and the caller decides.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CLONE="$ROOT/bernini"
+
+[ -d "$CLONE" ] || { echo "ws _sync-master: no clone at $CLONE — run ws init" >&2; exit 1; }
+
+git -C "$CLONE" fetch origin || exit $?
+
+# No origin/master to catch up to (a clone mid-init, a fork with another
+# default): nothing to do, and nothing worth saying.
+git -C "$CLONE" rev-parse --verify --quiet origin/master >/dev/null || exit 0
+
+BEHIND="$(git -C "$CLONE" rev-list --count master..origin/master 2>/dev/null || echo 0)"
+[ "$BEHIND" -gt 0 ] || exit 0
+
+if [ "$(git -C "$CLONE" rev-parse --abbrev-ref HEAD 2>/dev/null || true)" = master ]; then
+    if git -C "$CLONE" merge --ff-only -q origin/master 2>/dev/null; then
+        echo "pulled master into bernini/ ($BEHIND commit(s) from origin)"
+    else
+        echo "note: bernini/ master is $BEHIND commit(s) behind origin/master and did not fast-forward — left alone (git -C $CLONE pull --ff-only)"
+    fi
+else
+    # master is not checked out here, so its ref can be moved without touching
+    # anyone's working tree. git refuses this unless it is a fast-forward, and
+    # refuses it outright if some other worktree has master checked out — both
+    # of which are the answer we want anyway.
+    if git -C "$CLONE" fetch -q origin master:master 2>/dev/null; then
+        echo "pulled master ($BEHIND commit(s) from origin) — bernini/ is on another branch, so its checkout is untouched"
+    else
+        echo "note: master is $BEHIND commit(s) behind origin/master and did not fast-forward — left alone"
+    fi
+fi

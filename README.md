@@ -126,7 +126,8 @@ no list of commands or flags to keep in sync. Scripts named `_*` are plumbing: r
 
 Starts (or resumes) a feature:
 
-1. Fetches origin, then adds a worktree at `bernini.features/<name>` on branch `feat/<name>` —
+1. Fetches origin and pulls master (below), then adds a worktree at `bernini.features/<name>` on
+   branch `feat/<name>` —
    branched from `origin/master`, or reused as-is if the branch already exists locally or on
    origin (resume). `--branch <b>` borrows an existing branch instead (see below).
 2. Seeds the worktree: copies the machine `scripts/config.json` in, points the editor's
@@ -186,6 +187,20 @@ touched. The same works by hand at any time: `just init --preset <p> --force` in
 
 `--no-agent` (or `WS_NO_AGENT=1`) stops after step 2 and leaves a prepared worktree with no agent —
 a checkout to build and run the editor in, nothing more.
+
+#### Pulling master
+
+Step 1 fetches *and* fast-forwards the main clone's master (`scripts/_sync-master`), because
+nothing else in the workspace ever moves it. A new feature is cut from `origin/master` and is
+current either way — `bernini/` is the one that quietly falls weeks behind, and it is the checkout
+everything else leans on: the quick fix you make in it starts from an old master, `ws cmd bernini`
+builds yesterday's tree, and `ws done` reads a feature merged on GitHub as unmerged and refuses to
+delete its branch. So `ws done` pulls master too, right before that judgement.
+
+Fast-forward only, and never over anything. A clone mid-rebase or with a change in the way is left
+exactly as it is with a note; if master is not the checked-out branch, only the ref moves and your
+working tree is untouched. Since this is a real pull, it also smudges the LFS assets of whatever
+changed — a long-idle clone can take a moment to catch up.
 
 #### What the agent leaves running
 
@@ -294,7 +309,10 @@ Tears the feature down: removes the worktree (the git-ignored tracker and worktr
 it), kills the tmux window — which takes the agent's backgrounded watchers with it, see [what the
 agent leaves running](#what-the-agent-leaves-running) — and deletes the branch ws created for it.
 Refuses a dirty worktree or an
-unmerged branch rather than forcing — override by hand if that is really what you want. A borrowed
+unmerged branch rather than forcing — override by hand if that is really what you want. "Unmerged"
+is git's judgement against the *local* master, so master is [pulled first](#pulling-master);
+otherwise a feature merged on GitHub is refused for being merged somewhere this clone cannot see.
+A borrowed
 branch (`ws feature --branch`) is not ws's to delete: the worktree and window go, the branch stays.
 
 Removing the worktree deletes everything in it, git-ignored content included — that includes the

@@ -73,7 +73,10 @@ if tmux list-windows -t ws -F '#W' 2>/dev/null | grep -qx "$NAME"; then
 fi
 WT="$ROOT/bernini.features/$NAME"
 
-git -C "$ROOT/bernini" fetch origin
+# Fetch, and pull the main clone's master along with it: a new feature is cut
+# from origin/master, which the fetch makes current, but bernini/ itself is only
+# ever moved from here. See _sync-master.
+"$ROOT/scripts/_sync-master"
 
 # <name> is the key — the directory, the tmux window, the ws done argument —
 # and the branch is a separate thing, because a borrowed branch name carries

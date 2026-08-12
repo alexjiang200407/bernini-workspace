@@ -2,7 +2,9 @@
 # ws done <name> — tear down a feature: worktree, tmux window, branch.
 #
 # Mirrors ws/feature. Refuses to remove a dirty worktree or delete an unmerged
-# branch — force those by hand if that is really what you want. A borrowed
+# branch — force those by hand if that is really what you want. "Unmerged" is
+# judged against the local master, so master is pulled first (_sync-master):
+# otherwise a feature merged on GitHub looks unmerged here. A borrowed
 # branch (ws feature --branch) is not ws's to delete: the worktree and window
 # go, the branch stays.
 set -euo pipefail
@@ -27,5 +29,10 @@ tmux kill-window -t "ws:$NAME" 2>/dev/null || true
 if [ -n "$BORROWED" ]; then
     echo "removed the worktree; left $BRANCH alone (borrowed — delete it by hand if you want it gone)"
 else
+    # `branch -d` deletes only a branch git can see merged, and it looks at the
+    # local master — which nothing moves on its own, so a feature merged on
+    # GitHub reads as unmerged here until master is pulled. Best-effort: if the
+    # pull cannot happen, the old refusal is still the right answer.
+    "$ROOT/scripts/_sync-master" || true
     git -C "$ROOT/bernini" branch -d "$BRANCH"
 fi
