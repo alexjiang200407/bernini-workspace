@@ -174,6 +174,29 @@ worktree, rather than leaving one behind. Two exceptions, both of which carry th
 `--continue` (the conversation has it) and pointing `--cycle` at a feature that already exists —
 `bcp-feature` picks that up and reports where it stands.
 
+**The questions are edited in a real line editor**, because the answer to one of them is a
+paragraph describing a feature, and paragraphs get pasted rather than typed. So they run through
+zsh's editor (`vared`), which brackets pastes: a pasted paragraph lands in the answer whole,
+newlines and all, and nothing is submitted until you press Enter. Arrow keys, `^W`/`^U`, word
+motions, a backspace that crosses a wrapped row, `^D` to end the run — all the things a text input
+is expected to do.
+
+bash cannot do it here. macOS ships bash 3.2, whose readline predates bracketed paste, so the
+terminal has no way to say "this is a paste, not typing" and a pasted newline arrives as Enter: the
+first line was taken as the answer and *the rest was read by the following questions*, so pasting
+three lines quietly started the agent on `--model '- port the falloff'`. Plain `read` is worse
+still — it leaves editing to the terminal driver, which erases with a bare backspace and cannot
+climb back onto the row above, so a prompt long enough to wrap stopped being editable at the wrap,
+its characters leaving the buffer but staying on the screen.
+
+zsh is *not* a dependency, and it is not the shell you run `ws` from either — the scripts stay
+bash, and one `zsh -f` is spawned for the length of a question. It is simply the only editor a mac
+is guaranteed to have that can do this (`/bin/zsh`, base system). Where there is none, ws falls
+back to `read -e`, whose readline brackets pastes itself from bash 5.1 on (readline 8.1) — which
+covers every current Linux — and below that to the terminal driver, where a pasted multi-line
+prompt goes back to answering several questions at once. `ws doctor` reports which of the three
+you are on.
+
 An existing worktree is asked about *before* any of that: resume the previous conversation? Say yes
 and the question of a prompt never comes up, because the conversation is the intent. Only a fresh
 session on a `--one-shot` worktree still has to say what the change is — `bcp-implement` is one

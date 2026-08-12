@@ -31,6 +31,19 @@ command -v just >/dev/null 2>&1 || warn "just not on PATH (scripts fall back to 
 command -v gh >/dev/null 2>&1 || warn "gh not on PATH (ws list shows no PRs)"
 command -v git-lfs >/dev/null 2>&1 || fail "git-lfs not on PATH — assets check out as pointer text"
 
+# Who edits ws feature's questions. zsh is not required — it is just the only
+# line editor a mac has that brackets pastes, since the bash there is 3.2.
+# Without one, a pasted multi-line prompt is read as several answers: the first
+# line answers the prompt and the rest answer the questions after it.
+if command -v zsh >/dev/null 2>&1; then
+    ok "prompts edited by zsh ($(zsh -c 'echo $ZSH_VERSION' 2>/dev/null))"
+elif [ "${BASH_VERSINFO[0]}" -gt 5 ] ||
+    { [ "${BASH_VERSINFO[0]}" -eq 5 ] && [ "${BASH_VERSINFO[1]}" -ge 1 ]; }; then
+    ok "prompts edited by readline (bash $BASH_VERSION)"
+else
+    warn "no zsh, and bash $BASH_VERSION predates bracketed paste — paste a multi-line prompt into ws feature and its extra lines answer the questions after it; type it, or pass it as an argument"
+fi
+
 # The clones ws init creates.
 if [ -d "$ROOT/bernini/.git" ]; then
     ok "bernini/ cloned"

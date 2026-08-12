@@ -78,6 +78,64 @@ WT="$ROOT/bernini.features/$NAME"
 # ever moved from here. See _sync-master.
 "$ROOT/scripts/_sync-master"
 
+# Every question below is asked through a real line editor, because the answer
+# to one of them is a paragraph describing a feature, and paragraphs get pasted
+# in rather than typed.
+#
+# bash cannot do it here. macOS ships bash 3.2, whose readline predates
+# bracketed paste — the terminal has no way to say "this is a paste, not
+# typing" — so a pasted newline arrives as Enter. The first line is taken as
+# the answer and *the rest is read by the following questions*: paste three
+# lines into the prompt and ws quietly runs `claude --model '- port the
+# falloff'`. Plain `read` is worse still: it leaves editing to the terminal
+# driver, which erases with a bare backspace and cannot climb back onto the row
+# above, so a prompt long enough to wrap (a prompt for an agent usually is)
+# stops being editable at the wrap — the characters leave the buffer but stay
+# on the screen.
+#
+# zsh's editor is a generation newer than this bash's and is always on a mac,
+# so the questions go through it: a pasted paragraph lands whole, newlines and
+# all, and nothing is submitted until Enter. -f so this is *our* editor and not
+# whatever a login shell's rc makes of it — hence the keys spelled out below,
+# which an rc would otherwise have set up. ZLE draws on /dev/tty, so the answer
+# alone comes back on stdout.
+#
+# Not a dependency, though: without zsh this falls back to readline (`read -e`),
+# which brackets pastes itself from bash 5.1 on and edits a wrapped line
+# properly below that, and to the tty's own editing where even that is missing.
+# ws doctor says which. Only ever called behind a `[ -t 0 ]` test.
+ASK_ZSH="$(command -v zsh 2>/dev/null || true)"
+case "${TERM:-dumb}" in dumb | unknown) ASK_ZSH="" ;; esac
+ask() {
+    local __var="$1" __val
+    shift
+    if [ -z "$ASK_ZSH" ] || [ ! -t 0 ]; then
+        read -e -r -p "$*" "$__var"
+        return
+    fi
+    # vared's -p is a prompt, so a literal % has to be doubled — done here,
+    # in bash: zsh's own ${1//%/%%} matches the empty string at the end too and
+    # appends a stray % to every prompt.
+    __val="$("$ASK_ZSH" -f -i -c '
+        bindkey -e                    # emacs keys, whatever $EDITOR hints at
+        bindkey "^[[3~" delete-char
+        bindkey "^[[H" beginning-of-line;  bindkey "^[[1~" beginning-of-line
+        bindkey "^[[F" end-of-line;        bindkey "^[[4~" end-of-line
+        bindkey "^[[1;3C" forward-word;  bindkey "^[^[[C" forward-word
+        bindkey "^[[1;3D" backward-word; bindkey "^[^[[D" backward-word
+        bindkey "^[[1;5C" forward-word;  bindkey "^[[1;5D" backward-word
+        # ^D is end-of-input on an empty line, as it is at every other prompt —
+        # left alone it lists 1466 completions at you instead. It has to be the
+        # exit and not `zle send-break`, which vared reports as a plain empty
+        # answer; zsh still restores the terminal on the way out.
+        _ws_eof() { if [[ -n $BUFFER ]]; then zle delete-char; else exit 1; fi }
+        zle -N _ws_eof; bindkey "^D" _ws_eof
+        vared -p "$1" -c REPLY || exit 1
+        print -rn -- $REPLY
+    ' ws-ask "${*//%/%%}")" || return 1
+    eval "$__var=\$__val"
+}
+
 # <name> is the key — the directory, the tmux window, the ws done argument —
 # and the branch is a separate thing, because a borrowed branch name carries
 # slashes that neither the layout nor `tmux -t ws:<name>` can take.
@@ -145,8 +203,7 @@ if [ -z "$WORKFLOW" ]; then
         printf 'workflow?\n'
         printf '  [1] cycle    — plan PR, then one task PR at a time into feat/%s (bcp-feature)\n' "$NAME"
         printf '  [2] one-shot — the whole change as a single PR to master (bcp-implement)\n'
-        printf 'choice [1]: '
-        read -r ans
+        ask ans 'choice [1]: '
         case "$ans" in
             2 | one-shot | oneshot) WORKFLOW=one-shot ;;
             *) WORKFLOW=cycle ;;
@@ -167,15 +224,13 @@ fi
 # to resume it — which reads as ws having forgotten what the worktree is.
 COMPACT=""
 if [ -n "$EXISTED" ] && [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ -t 0 ]; then
-    printf 'resume the previous agent conversation? [Y/n] '
-    read -r ans
+    ask ans 'resume the previous agent conversation? [Y/n] '
     case "$ans" in
         n* | N*) ;;
         *) CONTINUE=1 ;;
     esac
     if [ -n "$CONTINUE" ]; then
-        printf 'compact it first (frees context, keeps a summary)? [y/N] '
-        read -r ans
+        ask ans 'compact it first (frees context, keeps a summary)? [y/N] '
         case "$ans" in
             y* | Y*) COMPACT=1 ;;
         esac
@@ -191,8 +246,7 @@ fi
 if [ -z "$PROMPT" ] && [ -z "$CONTINUE" ] && [ -z "$NO_AGENT" ] && [ "$WORKFLOW" != none ] &&
     ! { [ "$WORKFLOW" = cycle ] && [ -n "$EXISTING_FEATURE" ]; }; then
     if [ -t 0 ]; then
-        printf 'prompt — what should the agent do? '
-        read -r PROMPT
+        ask PROMPT 'prompt — what should the agent do? '
     fi
     if [ -z "$PROMPT" ]; then
         if [ -n "$EXISTED" ]; then
@@ -292,8 +346,7 @@ fi
 # was started on. Scripted runs stay silent and take the configured default
 # unless they passed --model.
 if [ -z "$MODEL" ] && [ -z "$CONTINUE" ] && [ -t 0 ]; then
-    printf 'model? [1] opus  [2] sonnet  [3] haiku  [Enter] configured default: '
-    read -r ans
+    ask ans 'model? [1] opus  [2] sonnet  [3] haiku  [Enter] configured default: '
     case "$ans" in
         1) MODEL="opus" ;;
         2) MODEL="sonnet" ;;
@@ -303,33 +356,44 @@ if [ -z "$MODEL" ] && [ -z "$CONTINUE" ] && [ -t 0 ]; then
     esac
 fi
 
+# Quote one argument for the shell tmux hands the command to. Not `printf %q`:
+# a pasted prompt can carry newlines, which %q spells `$'\n'` — a bashism, and
+# on Linux the /bin/sh running this is often dash, which would pass the two
+# characters through and mangle the prompt. Single quotes are POSIX and hold a
+# newline as it is.
+sq() {
+    local s=$1
+    s=${s//\'/\'\\\'\'}
+    printf "'%s'" "$s"
+}
+
 # Interactive tmux, not `claude -p`: bcp-feature's backgrounded watch-pr needs a
 # live session to wake. Every agent window lives in the `ws` session, so
 # ws attach always finds them. --continue resumes the worktree's previous
 # conversation (each worktree is its own claude project) instead of starting
 # the bcp-feature prompt fresh.
-CMD="claude --permission-mode $(printf '%q' "$MODE")${MODEL:+ --model $(printf '%q' "$MODEL")}"
+CMD="claude --permission-mode $(sq "$MODE")${MODEL:+ --model $(sq "$MODEL")}"
 if [ -n "$COMPACT" ]; then
     # /compact runs as the first input; a prompt can't be queued behind it.
     [ -n "$PROMPT" ] && echo "note: compacting first — give the prompt via ws attach $NAME once it finishes"
     CMD="$CMD --continue '/compact'"
 elif [ -n "$CONTINUE" ]; then
-    CMD="$CMD --continue${PROMPT:+ $(printf '%q' "$PROMPT")}"
+    CMD="$CMD --continue${PROMPT:+ $(sq "$PROMPT")}"
 elif [ "$WORKFLOW" = one-shot ]; then
-    CMD="$CMD $(printf '%q' "bcp-implement $PROMPT")"
+    CMD="$CMD $(sq "bcp-implement $PROMPT")"
 elif [ "$WORKFLOW" = cycle ]; then
-    CMD="$CMD $(printf '%q' "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
+    CMD="$CMD $(sq "bcp-feature $NAME${PROMPT:+ $PROMPT}")"
 else
     # No workflow — a borrowed branch is someone else's feature, mid-flight, and
     # bcp-feature would open a feature workflow on top of it. The session gets
     # the prompt as given (or nothing) and whoever is debugging says what they
     # want.
-    CMD="$CMD${PROMPT:+ $(printf '%q' "$PROMPT")}"
+    CMD="$CMD${PROMPT:+ $(sq "$PROMPT")}"
 fi
 # Under _agent, which takes the agent's backgrounded work (bcp-feature's
 # `just watch-pr`) down with the session. claude starts those detached, so
 # closing the window leaves them polling a PR nobody is reading — see _agent.
-CMD="$(printf '%q' "$ROOT/scripts/_agent") $CMD"
+CMD="$(sq "$ROOT/scripts/_agent") $CMD"
 if tmux has-session -t ws 2>/dev/null; then
     tmux new-window -t ws: -c "$WT" -n "$NAME" "$CMD"
 else

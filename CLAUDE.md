@@ -53,7 +53,10 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   re-seeds the wrong base. A new feature must come with a prompt — a terminal run asks for one, a
   non-interactive run refuses before creating anything; `--continue`, a borrowed checkout, and
   `--cycle` on an existing feature are the exceptions. An existing worktree is asked whether to
-  resume its previous conversation *first*, and resuming means no prompt is wanted at all.
+  resume its previous conversation *first*, and resuming means no prompt is wanted at all. Every
+  question it asks is edited in zsh's line editor (`vared`, falling back to `read -e`): pastes are
+  bracketed, so a pasted multi-line prompt lands whole instead of the first line answering this
+  question and the rest answering the next ones — macOS bash 3.2 cannot do that.
   Before any of it, `scripts/_sync-master` fetches and fast-forwards the main clone's master:
   nothing else in the workspace moves `bernini/`, and a stale master means quick fixes cut from an
   old tree and a `ws done` that reads a merged feature as unmerged.
