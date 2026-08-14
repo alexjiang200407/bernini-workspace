@@ -93,5 +93,10 @@ be checked out in yours. Do your work in your own checkout; leave worktree creat
   there and not where you invoked `ws`. One terminal instead of one per worktree.
 - `ws done <name>` — remove the worktree, kill the tmux window, delete the branch ws created for it
   (a borrowed branch is left alone). Refuses a dirty worktree or an unmerged branch rather than
-  forcing — pulling master first, since "unmerged" is judged against the local one.
+  forcing — pulling master first, since "unmerged" is judged against the local one. It lists what it
+  is about to remove and asks, every run, a merged feature included: the branch is the part that
+  survives, and what goes with the worktree is the build dir. `--yes` and a scripted run print the
+  same listing and skip the question. The listing says whether the branch is merged, which is the
+  one thing the teardown itself cannot tell you in time: `branch -d` runs last, so its refusal of an
+  unmerged branch arrives once the worktree is already gone.
 - `ws list` — worktrees alongside open PRs: every live feature, its checkout, its PR state.

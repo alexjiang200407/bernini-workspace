@@ -150,8 +150,15 @@ if [ "$CWORD" -le 1 ]; then
 fi
 
 case "${WORDS[1]-}" in
-    attach | done)
+    attach)
         [ "$(positionals_before)" = 0 ] && features
+        ;;
+    done)
+        if [ "$(positionals_before)" = 0 ] && [ "${CUR#-}" = "$CUR" ]; then
+            features
+        else
+            emit --yes "tear it down without asking"
+        fi
         ;;
     cmd)
         if [ "$(positionals_before)" = 0 ]; then

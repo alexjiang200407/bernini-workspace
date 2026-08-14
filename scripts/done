@@ -7,10 +7,31 @@
 # otherwise a feature merged on GitHub looks unmerged here. A borrowed
 # branch (ws feature --branch) is not ws's to delete: the worktree and window
 # go, the branch stays.
+#
+# Everything it removes is listed first and confirmed at a terminal, every run —
+# a merged feature included, because what dies with the worktree is not the
+# branch. The checkout goes with its build dir, and rebuilding one is a coffee.
+# The listing is printed either way; only the question needs a terminal, so
+# --yes and a scripted run skip it and keep the record.
+#
+# The confirmation says whether the branch is merged, and _sync-master runs
+# ahead of it so that answer is judged against a current master rather than
+# whatever this clone last saw. The teardown order below is untouched: an
+# unmerged branch still loses its worktree before `branch -d` refuses it, which
+# is what the warning is for.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NAME="${1:?usage: ws done <name>}"
+USAGE='usage: ws done <name> [--yes]'
+NAME="${1:?$USAGE}"
+shift
+YES=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --yes | -y) YES=1; shift ;;
+        *) echo "$USAGE" >&2; exit 2 ;;
+    esac
+done
 WT="$ROOT/bernini.features/$NAME"
 
 # Read the worktree's own record before removing it — afterwards there is
@@ -24,15 +45,38 @@ if [ -d "$WT" ]; then
 fi
 BRANCH="${BRANCH:-feat/$NAME}"
 
+# Best-effort: if the pull cannot happen, an unmerged verdict is still the one
+# `branch -d` will reach below, so the warning and the refusal agree.
+"$ROOT/scripts/_sync-master" || true
+
+if [ -n "$BORROWED" ]; then
+    BRANCH_NOTE="$BRANCH — borrowed, left alone"
+elif ! git -C "$ROOT/bernini" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    BRANCH_NOTE="$BRANCH — gone already"
+elif git -C "$ROOT/bernini" merge-base --is-ancestor "$BRANCH" master 2>/dev/null; then
+    BRANCH_NOTE="$BRANCH — merged into master, will be deleted"
+else
+    BRANCH_NOTE="$BRANCH — NOT merged into master: \`branch -d\` refuses it, worktree already gone"
+fi
+
+printf 'ws done %s removes:\n' "$NAME"
+printf '  worktree  %s\n' "$WT"
+printf '            and everything in it — build/, logs, anything uncommitted\n'
+printf '  window    ws:%s\n' "$NAME"
+printf '  branch    %s\n' "$BRANCH_NOTE"
+
+if [ -z "$YES" ] && [ -t 0 ]; then
+    read -r -p 'proceed? [y/N] ' ANS < /dev/tty || ANS=""
+    case "$ANS" in
+        [yY] | [yY][eE][sS]) ;;
+        *) echo "left alone"; exit 1 ;;
+    esac
+fi
+
 git -C "$ROOT/bernini" worktree remove "$WT"
 tmux kill-window -t "ws:$NAME" 2>/dev/null || true
 if [ -n "$BORROWED" ]; then
     echo "removed the worktree; left $BRANCH alone (borrowed — delete it by hand if you want it gone)"
 else
-    # `branch -d` deletes only a branch git can see merged, and it looks at the
-    # local master — which nothing moves on its own, so a feature merged on
-    # GitHub reads as unmerged here until master is pulled. Best-effort: if the
-    # pull cannot happen, the old refusal is still the right answer.
-    "$ROOT/scripts/_sync-master" || true
     git -C "$ROOT/bernini" branch -d "$BRANCH"
 fi
